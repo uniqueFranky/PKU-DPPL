@@ -1,0 +1,115 @@
+%derive<Show> Token
+%derive<Show> ParseError
+%position<Pos>
+%start program
+
+%token EOF
+%token AS           "as"
+%token ELSE         "else"
+%token FALSE        "false"
+%token IF           "if"
+%token IN           "in"
+%token LET          "let"
+%token TRUE         "true"
+%token UBOOL        "Bool"
+%token UINT         "Int"
+%token USOME        "Some"
+%token USTRING      "String"
+%token UUNIT        "Unit"
+%token FUNC         "func"
+%token STRUCT       "struct"
+%token PROTOCOL     "protocol"
+%token EXTENSION    "extension"
+%token RETURN       "return"
+%token ANY          "any"
+%token<String> LCID
+%token<String> UCID
+%token<Int> INTV
+%token<String> STRINGV
+%token ARROW        "->"
+%token COLON        ":"
+%token COMMA        ","
+%token DOT          "."
+%token EQ           "="
+%token GT           ">"
+%token LCURLY       "{"
+%token LPAREN       "("
+%token LSQUARE      "["
+%token LT           "<"
+%token RCURLY       "}"
+%token RPAREN       ")"
+%token RSQUARE      "]"
+%token SEMI         ";"
+%token STAR         "*"
+%token USCORE       "_"
+%token AND          "&"
+
+%type<Program>                program
+%type<Stmt>                   stmt
+%type<Array[Stmt]>            stmts
+%type<Decl>                   decl
+%type<Expr>                   expr
+%type<Array[(String, Type)]>  param_list
+%type<Array[(String, Type)]>  param_list_opt
+%type<Array[Type]>            type_list
+%type<Array[Type]>            type_list_opt
+%type<Type>                   type
+
+%%
+
+program
+  : stmts EOF             { $1 }
+  ;
+
+stmts
+  : stmts stmt            { [].add($1).add([$2]) }
+  | stmt                  { [$1] }
+  ;
+
+stmt
+  : decl                  { Stmt::Decl($1) }
+  | expr                  { Stmt::Expr($1) }
+  ;
+
+param_list
+  : param_list COMMA LCID COLON type    { [].add($1).add([($3, $5)]) }
+  | LCID COLON type                     { [($1, $3)] } 
+  ;
+
+param_list_opt
+  : LPAREN param_list RPAREN            { $2 }
+  | LPAREN RPAREN                       { [] }
+  ;
+
+
+decl
+  : FUNC LCID param_list_opt ARROW type LCURLY stmts RCURLY { Decl::Function($2, $3, $5, $7) }
+  ;
+
+expr
+  : INTV            { Expr::IntLit($1) }
+  ;
+
+type_list
+  : type_list COMMA type    { [].add($1).add([$3]) }
+  | type                    { [$1] }
+  ;
+
+type_list_opt
+  : LPAREN type_list RPAREN { $2 }
+  | LPAREN RPAREN           { [] }
+  ;
+
+
+type
+  : UINT             { Type::Int }
+  | UBOOL            { Type::Bool } 
+  | USTRING          { Type::String }
+  | UCID             { Type::UDT($1) }
+  | UUNIT            { Type::Unit }
+  | type_list_opt ARROW type  { Type::Function($1, $3) }
+  ;
+
+
+
+
