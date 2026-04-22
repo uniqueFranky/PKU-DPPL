@@ -5,9 +5,8 @@ enum Type {
   Unit
   Self
   UDT(String)
-  Function(Array[Type], Type)
+  Function(Array[TypeParam], Array[Type], Type) 
 } derive(Show)
-
 
 enum ArgExpr {
   Positional(Expr)
@@ -19,8 +18,13 @@ enum ParamExpr {
   Labeled(String, String, Type)
 } derive(Show)
 
+enum TypeParam {
+  Generic(String)
+  Constrained(String, Array[Type])
+} derive(Show)
+
 enum FuncSig {
-  Plain(String, Array[ParamExpr], Type) // name, args (name, label, type), return type
+  Sig(String, Array[TypeParam], Array[ParamExpr], Type)
 } derive(Show)
 
 enum Expr {
@@ -30,10 +34,11 @@ enum Expr {
   Self
   Variable(String)
   Call(Expr, Array[ArgExpr])
-  Access(Expr, Expr)
+  GenericInst(Expr, Array[Type]) 
+  Access(Expr, String)
   IfElse(Expr, StmtList, StmtList)
   If(Expr, StmtList)
-  Function(Array[ParamExpr], Type, StmtList)
+  Function(Array[TypeParam], Array[ParamExpr], Type, StmtList)
 } derive(Show)
 
 enum Decl {
@@ -43,6 +48,7 @@ enum Decl {
   Field(String, Type)
   Struct(String, Array[Decl])
   Protocol(String, Array[Decl])
+  Extension(Type, String, Array[Decl]) 
 } derive(Show)
 
 enum Stmt {
@@ -55,4 +61,4 @@ enum StmtList {
   StmtList(Stmt, StmtList)
 } derive(Show)
 
-type Program =  StmtList
+type Program = StmtList

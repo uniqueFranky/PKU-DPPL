@@ -1,19 +1,18 @@
-let f: (Int, Int) -> Bool = func (_: Int, val: Int) -> Bool {
-    false
+func poly<T: P, S: P & PP, L>(x: T) -> Bool {
+    x.foo(1)
 }
 
-struct S {
-    let x: Int
-    let y: Bool
-    func foo(_ x: Int) -> Bool {
-        let z: Bool = false
-        self.y
-    }
-}
+poly<S, O, I>(1)
 
-protocol P {
-    let x: Int
-    func foo(_ x: Int) -> Bool
+let polyF: <T: P, S: P & PP>(T, S) -> Bool = func <T: P, S: P & PP>(x: T, y: S) -> Bool {
+    x.foo(1)
 }
 
 
+let f: <T, S>(T) -> T = 
+    if cond
+    { func <T>(x: T) -> T { x } }
+    else { func <T>(x: T) -> T { x } }
+
+f<T1><T2>(x)
+f<T1, T2>(x)
