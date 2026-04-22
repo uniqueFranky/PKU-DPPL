@@ -16,3 +16,6 @@ let f: <T, S>(T) -> T =
 
 f<T1><T2>(x)
 f<T1, T2>(x)
+
+
+S(x: 123, y: false)

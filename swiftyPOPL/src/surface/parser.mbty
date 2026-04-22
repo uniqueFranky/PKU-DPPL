@@ -255,6 +255,8 @@ expr
 postfix_expr
   : atom_expr
       { $1 }
+  | UCID arg_list_opt
+      { Expr::Construct($1, $2) }    
   | postfix_expr arg_list_opt
       { Expr::Call($1, $2) }
   | postfix_expr DOT LCID

@@ -34,6 +34,7 @@ enum Expr {
   Self
   Ident(String)
   Call(Expr, Array[ArgExpr])
+  Construct(String, Array[ArgExpr])
   GenericInst(Expr, Array[Type]) 
   Access(Expr, String)
   IfElse(Expr, StmtList, StmtList)
