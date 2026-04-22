@@ -1,0 +1,194 @@
+\documentclass[manuscript]{acmart}
+
+\AtBeginDocument{%
+  \providecommand\BibTeX{{%
+    Bib\TeX}}}
+
+\setcopyright{acmlicensed}
+\copyrightyear{2018}
+\acmYear{2018}
+\acmDOI{XXXXXXX.XXXXXXX}
+\acmConference[Conference acronym 'XX]{Make sure to enter the correct
+  conference title from your rights confirmation email}{June 03--05,
+  2018}{Woodstock, NY}
+
+\acmISBN{978-1-4503-XXXX-X/2018/06}
+
+\usepackage{array}
+\usepackage{mathtools}
+\usepackage{stmaryrd}
+\usepackage{mathpartir}
+
+
+\begin{document}
+
+\title{Typing Rules for the Surface Language of \textsc{swiftyPOPL}}
+
+\author{Runbang Yan}
+\email{rbyan25@stu.pku.edu.cn}
+\affiliation{%
+  \institution{School of Computer Science, Peking University}
+  \city{Beijing}
+  \country{China}
+}
+
+\renewcommand{\shortauthors}{Yan}
+
+\begin{abstract}
+  This paper presents a formal account of the typing rules for the surface language of \textsc{swiftyPOPL}.
+  The language supports first-class functions, algebraic surface-level declarations, nominal user-defined types, protocols, extensions, and lightweight generics with constrained type parameters.
+  We define a syntax-directed static type system for expressions, declarations, and top-level statements.
+  The system is designed to provide a clear elaboration target for a core language while preserving the high-level structure of the source language.
+  The specification in this paper follows the implemented parser and gives a concise declarative presentation of well-typed programs.
+\end{abstract}
+
+\maketitle
+
+\section{Surface Language Typing Rules}
+
+To formalize the typing rules for \textsc{swiftyPOPL}, we introduce several distinct typing environments.
+These environments maintain the context required to resolve variables, type structures, protocol conformances, and generic constraints during type checking.
+
+
+\subsection{Meta Variables}
+We use the following meta variables to represent various components of the language:
+\begin{itemize}
+  \item \textbf{Value Variables:} $x, y, z$ \quad (lowercase identifiers, including function names $f, g, h$)
+  \item \textbf{Type Variables:} $X, Y, Z$ \quad (type parameters in generic definitions)
+  \item \textbf{Protocols:} $P, Q, R$ \quad (protocol names)
+  \item \textbf{Structs:} $S, S_1, S_2$ \quad (struct names)
+  \item \textbf{Argument Labels:} $\ell$ \quad (parameter labels in function signatures)
+  \item \textbf{Expressions:} $e$ \quad (or $\mathit{expr}$)
+  \item \textbf{Declarations:} $\mathit{decl}$
+  \item \textbf{Statements:} $\mathit{stmt}$
+  \item \textbf{Statement Sequence}: $ss, ss_1, ss_2$
+  \item \textbf{Types:} $T, U, V$
+  \item \textbf{Type Parameters:} $M, N, O$ \quad (a type variable $X$ optionally with constraint: $X$ or $X : C$)
+  \item \textbf{List of Type Parameters:} $L$ \quad (a list of type parameters)
+  \item \textbf{Constraints:} $C$ \quad (protocol intersection: $T_1 \,\&\, \cdots \,\&\, T_n$)
+  \item \textbf{Boolean Literals:} $b \in \{\mathit{true}, \mathit{false}\}$
+  \item \textbf{Integer Literals:} $n$
+  \item \textbf{String Literals:} $s$
+\end{itemize}
+
+\subsection{Typing Environments}
+
+\paragraph{Value Environment ($\Gamma$)}
+The value environment tracks the types of variables, function parameters, and function names currently in scope. It maps identifiers to their corresponding types.
+\begin{itemize}
+  \item \textbf{Lookup:} $\Gamma(x) = T$ (identifier $x$ has type $T$).
+  \item \textbf{Extension:} $\Gamma, x : T$ (extends the environment with a new binding for $x$).
+\end{itemize}
+
+\paragraph{Struct Definition Environment ($\Theta$)}
+The struct definition environment stores the structural blueprints of user-defined structs (\texttt{struct}) and protocols (\texttt{protocol}).
+\begin{itemize}
+  \item \textbf{Structs:} $\Theta(S) = \{ x: T_1, y: T_2, f : T_3, g : T_4, \dots \}$ (struct $\Theta(S)$ contains fields $f_i$ of type $T_i$).
+  \item \textbf{Protocols:} $\Theta(P) = \{ m_1 : \text{Sig}_1, \dots \}$ (protocol $\Theta(P)$ requires method signatures $\text{Sig}_i$).
+\end{itemize}
+
+\paragraph{Conformance Environment ($\Sigma$)}
+The conformance environment maintains the relationships established by \texttt{extension} declarations.
+It records which concrete types satisfy which protocols.
+\begin{itemize}
+  \item \textbf{Judgment:} $\Sigma \vdash T \models P$ (type $T$ conforms to protocol $P$).
+  \item \textbf{Recording:} $\Sigma(T, P) = \text{true}$ (registers the conformance of $T$ to $P$).
+\end{itemize}
+
+\paragraph{Generic Context ($\Delta$)}
+The generic context is a local environment that tracks the active type variables and their associated trait bounds within a generic function or extension.
+\begin{itemize}
+  \item \textbf{Bounds:} $\Delta(T) = \{ P_1, P_2 \}$ (type variable $T$ is constrained by protocols $P_1$ and $P_2$).
+  \item \textbf{Extension:} $\Delta, T : \{P\}$ (introduces a new type variable $T$ with bounds).
+\end{itemize}
+
+\paragraph{Local Execution Context ($\Xi$)}
+The local execution context handles context-sensitive keywords and expectations, such as the current resolution of the \texttt{Self} type and the expected return type of the current function body.
+\begin{itemize}
+  \item \textbf{Self Binding:} $\Xi_{\text{Self}} = T$ (the \texttt{Self} keyword resolves to type $T$).
+  \item \textbf{Return Type:} $\Xi_{\text{ret}} = T$ (the current block expects a return type of $T$).
+\end{itemize}
+
+The general form of our typing judgments combines these environments, typically written as $\Gamma, \Theta, \Sigma, \Delta, \Xi \vdash e : T$, meaning that under these contexts, the expression $e$ evaluates to type $T$.
+
+\subsection{Syntax for the Surface Language}
+
+
+\subsection{Typing Rules for the Surface Language}
+
+$$
+  \begin{array}{@{}llll@{}}
+    C & ::= & P_1 \,\&\, P_2 \,\&\, \cdots \,\&\, P_n & \text{constraint (protocol intersection)} \\[6pt]
+    M & ::= & X                                       & \text{unconstrained type param}           \\
+      &     & X \mathbin{:} C                         & \text{constrained type param}             \\
+    L & ::= & M                                       & \text{single type param}                  \\
+      &     & L \times M                              & \text{multitple type params}              \\
+  \end{array}
+$$
+
+$$
+  \begin{array}{@{}llll@{}}
+    T & ::= & \text{Int}                          & \text{integer type}                                \\
+      &     & \text{Bool}                         & \text{boolean type}                                \\
+      &     & \text{String}                       & \text{string type}                                 \\
+      &     & \text{Unit}                         & \text{unit type}                                   \\
+      &     & \text{Self}                         & \text{self type (protocol/extension context only)} \\
+      &     & S                                   & \text{user-defined type (struct)}                  \\
+      &     & X                                   & \text{type variable}                               \\
+      &     & T_1 \times T_2                      & \text{production type}                             \\
+      &     & T \rightarrow T                     & \text{monomorphic function type}                   \\
+      &     & \langle L \rangle (T) \rightarrow T & \text{polymorphic function type}                   \\
+  \end{array}
+$$
+
+\begin{mathpar}
+  \inferrule*[right=\textsc{T-BoolLit}]
+  { }
+  {\Gamma; \Theta; \Sigma; \Delta; \Xi \vdash b: \text{Bool}}
+
+  \inferrule*[right=\textsc{T-IntLit}]
+  { }
+  {\Gamma; \Theta; \Sigma; \Delta; \Xi \vdash n: \text{Int}}
+
+  \inferrule*[right=\textsc{T-StringLit}]
+  { }
+  {\Gamma; \Theta; \Sigma; \Delta; \Xi \vdash s: \text{String}}
+
+  \inferrule*[right=\textsc{T-Construct}]
+  { \Theta(S) = \{ x_1: T_1, \dots, x_n: T_n, f_1 : U_1, \dots, f_n : U_m \} \\
+    \Gamma; \Theta; \Sigma; \Delta; \Xi \vdash e_i : T_i \text{ for } i = 1, \dots, n
+  }
+  { \Gamma; \Theta; \Sigma; \Delta; \Xi \vdash S(f_1: e_1, \dots, f_n: e_n) : S }
+
+  \inferrule*[right=\textsc{T-Seq-VarDecl}]
+  { \Gamma; \Theta; \Sigma; \Delta; \Xi \vdash e : T \\
+    \Gamma, x: T; \Theta; \Sigma; \Delta; \Xi \vdash ss: U
+  }
+  { \Gamma; \Theta; \Sigma; \Delta; \Xi \vdash \text{let}\ x: T = e; ss : U }
+
+  \inferrule*[right=\textsc{T-Seq-FuncDef}]
+  { \Gamma; \Theta; \Sigma; \Delta; \Xi \vdash \text{func} f\langle \dots \rangle (\dots) \rightarrow U \{\dots\} : T \\
+    \Gamma, f: T; \Theta; \Sigma; \Delta; \Xi \vdash ss: V }
+  { \Gamma; \Theta; \Sigma; \Delta; \Xi \vdash \text{func}\ f\langle \dots \rangle (\dots) \rightarrow U \{\dots\}; ss : V }
+
+  \inferrule*[right=\textsc(T-Seq-Protocol-FuncDecl)]
+  { \Xi_{\text{Self}} = P \\
+    \Gamma; \Theta; \Sigma; \Delta; \Xi \vdash \text{func} f\langle X_1, \dots, X_n, Y_1: P_1, \dots, Y_m: P_m \rangle (x_1: T_1, \dots, x_k: T_k) \rightarrow U: T \\
+    \Gamma; \Theta; \Sigma; \Delta; \Xi \vdash ss: V
+  }
+  { \Gamma; \Theta; \Sigma; \Delta; \Xi, P. f: \langle X_1, \dots, X_n, Y_1: P_1, \dots, Y_m: P_m \rangle (T_1 \times \dots \times T_k) \rightarrow U \vdash \text{func}\ f\langle \dots \rangle (\dots) \rightarrow U; ss : V }
+
+  \inferrule*[right=\textsc{T-Into-ProtocolDecl}]
+  {
+    \Gamma; \Theta; \Sigma; \Delta; \Xi[\text{self}\mapsto P] \vdash ss: T
+  }
+  { 
+    \Gamma; \Theta, P ; \Sigma; \Delta; \Xi \vdash \text{protocol}\ P\ \{\ ss\ \} : T
+  }
+
+\end{mathpar}
+
+\end{document}
+\endinput
+%%
+%% End of file.

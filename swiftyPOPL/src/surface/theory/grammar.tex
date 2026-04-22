@@ -1,0 +1,100 @@
+$$
+\begin{array}{llll}
+program & ::= & stmt\_list\ EOF & \text{program} \\
+\\
+stmt\_list & ::= &                  & \text{statement list}        \\
+           &     & stmt\_list\ stmt & \text{sequential statements} \\
+           &     & stmt             & \text{single statement}      \\
+\\
+stmt & ::= &      & \text{statement list}        \\
+     &     & decl & \text{declaration statement} \\
+     &     & expr & \text{expression statement}  \\
+\\
+param\_expr & ::= & LCID\ LCID\ :\ type & \text{labeled parameter}   \\
+            &     & LCID\ :\ type      & \text{unlabeled parameter} \\
+\\
+param\_list & ::= & param\_list\ ,\ param\_expr & \text{multiple parameters} \\
+            &     & param\_expr                 & \text{single parameter}    \\
+\\
+param\_list\_opt & ::= & (\ param\_list\ ) & \text{nonempty parameter list} \\
+                 &     & (\ )             & \text{empty parameter list}    \\
+\\
+arg\_expr & ::= & expr          & \text{positional argument} \\
+          &     & LCID\ :\ expr & \text{named argument}      \\
+\\
+arg\_list & ::= & arg\_list\ ,\ arg\_expr & \text{multiple arguments} \\
+          &     & arg\_expr               & \text{single argument}    \\
+\\
+arg\_list\_opt & ::= & (\ arg\_list\ ) & \text{nonempty argument list} \\
+               &     & (\ )           & \text{empty argument list}    \\
+\\
+type\_constraint\_list & ::= & type\_constraint\_list\ \&\ type & \text{multiple constraints} \\
+                       &     & type                             & \text{single constraint}    \\
+\\
+type\_constraint\_list\_opt & ::= & :\ type\_constraint\_list & \text{constrained type parameter} \\
+                            &     &                           & \text{no constraints}             \\
+\\
+type\_param & ::= & UCID\ type\_constraint\_list\_opt & \text{type parameter} \\
+\\
+type\_param\_list & ::= & type\_param\_list\ ,\ type\_param & \text{multiple type parameters} \\
+                  &     & type\_param                       & \text{single type parameter}    \\
+\\
+generic\_params & ::= & <\ type\_param\_list\ > & \text{generic parameter list} \\
+\\
+generic\_params\_opt & ::= & generic\_params & \text{generic parameters}    \\
+                     &     &                & \text{no generic parameters} \\
+\\
+init\_expr\_opt & ::= & =\ expr & \text{initialized declaration}              \\
+                &     &         & \text{declaration without initializer}      \\
+\\
+decl & ::= & let\ LCID\ :\ type\ init\_expr\_opt                  & \text{variable or field declaration}     \\
+     &     & func\ func\_sig\ func\_body\_opt                     & \text{function declaration or definition} \\
+     &     & struct\ UCID\ \{\ decl\_list\ \}                     & \text{struct declaration}                 \\
+     &     & protocol\ UCID\ \{\ decl\_list\ \}                   & \text{protocol declaration}               \\
+     &     & extension\ type\ :\ UCID\ \{\ decl\_list\ \}         & \text{extension declaration}              \\
+\\
+func\_body\_opt & ::= & \{\ stmt\_list\ \} & \text{function body}    \\
+                &     &                    & \text{declaration only} \\
+\\
+decl\_list & ::= & decl\_list\ decl & \text{multiple declarations} \\
+           &     & decl             & \text{single declaration}    \\
+\\
+func\_sig & ::= & LCID\ generic\_params\_opt\ param\_list\_opt\ ->\ type & \text{function signature} \\
+\\
+expr & ::= & if\ expr\ \{\ stmt\_list\ \} & \text{if expression} \\
+     &     & if\ expr\ \{\ stmt\_list\ \}\ else\ \{\ stmt\_list\ \} & \text{if-else expression} \\
+     &     & func\ generic\_params\_opt\ param\_list\_opt\ ->\ type\ \{\ stmt\_list\ \} & \text{function expression} \\
+     &     & postfix\_expr & \text{postfix expression} \\
+\\
+postfix\_expr & ::= & atom\_expr & \text{atomic expression} \\
+              &     & postfix\_expr\ arg\_list\_opt & \text{function call} \\
+              &     & postfix\_expr\ .\ LCID & \text{field access} \\
+              &     & postfix\_expr\ <\ type\_list\ > & \text{generic instantiation} \\
+\\
+atom\_expr & ::= & INTV       & \text{integer literal}            \\
+           &     & false      & \text{false literal}              \\
+           &     & true       & \text{true literal}               \\
+           &     & STRINGV    & \text{string literal}             \\
+           &     & LCID       & \text{identifier}                 \\
+           &     & self       & \text{self expression}            \\
+           &     & (\ expr\ ) & \text{parenthesized expression}   \\
+\\
+type\_list & ::= & type\_list\ ,\ type & \text{multiple types} \\
+           &     & type                & \text{single type}    \\
+\\
+type\_tuple & ::= & (\ type\_list\ ) & \text{nonempty type tuple} \\
+            &     & (\ )            & \text{empty type tuple}    \\
+\\
+type & ::= & atomic\_type & \text{atomic type} \\
+     &     & atomic\_type\ ->\ type & \text{single-argument function type} \\
+     &     & generic\_params\_opt\ type\_tuple\ ->\ type & \text{function type} \\
+\\
+atomic\_type & ::= & Int        & \text{integer type}       \\
+             &     & Bool       & \text{boolean type}       \\
+             &     & String     & \text{string type}        \\
+             &     & UCID       & \text{user-defined type}  \\
+             &     & Unit       & \text{unit type}          \\
+             &     & Self       & \text{self type}          \\
+             &     & (\ type\ ) & \text{parenthesized type} \\
+\end{array}
+$$
