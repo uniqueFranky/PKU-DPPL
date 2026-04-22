@@ -51,6 +51,7 @@
 %type<StmtList>                       stmt_list
 %type<Decl>                           decl
 %type<Array[Decl]>                    decl_list
+%type<Option[Array[Decl]]>            decl_list_opt
 %type<Option[Expr]>                   init_expr_opt
 
 %type<Expr>                           expr
@@ -212,12 +213,23 @@ decl
           None => Decl::FuncDecl($2)
         }
       }
-  | STRUCT UCID LCURLY decl_list RCURLY
-      { Decl::Struct($2, $4) }
+  | STRUCT UCID decl_list_opt
+      { 
+        match $3 {
+            Some(body) => Decl::StructDef($2, body)
+            None => Decl::StructDecl($2)
+        }
+      }
   | PROTOCOL UCID LCURLY decl_list RCURLY
       { Decl::Protocol($2, $4) }
   | EXTENSION type COLON UCID LCURLY decl_list RCURLY
       { Decl::Extension($2, $4, $6) }
+  ;
+
+decl_list_opt
+  : LCURLY decl_list RCURLY
+    { Some($2) }
+  | { None }
   ;
 
 func_body_opt

@@ -19,3 +19,10 @@ f<T1, T2>(x)
 
 
 S(x: 123, y: false)
+
+
+struct S
+
+struct S {
+    let x: Int
+}
