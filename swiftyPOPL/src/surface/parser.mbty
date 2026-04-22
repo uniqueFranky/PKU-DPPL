@@ -272,7 +272,7 @@ atom_expr
   | STRINGV
       { Expr::StringLit($1) }
   | LCID
-      { Expr::Variable($1) }
+      { Expr::Ident($1) }
   | SELF
       { Expr::Self }
   | LPAREN expr RPAREN

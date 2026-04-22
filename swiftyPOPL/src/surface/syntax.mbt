@@ -32,7 +32,7 @@ enum Expr {
   BoolLit(Bool)
   StringLit(String)
   Self
-  Variable(String)
+  Ident(String)
   Call(Expr, Array[ArgExpr])
   GenericInst(Expr, Array[Type]) 
   Access(Expr, String)
