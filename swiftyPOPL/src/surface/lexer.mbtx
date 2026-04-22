@@ -68,6 +68,8 @@ rule token() -> (Token, Pos, Pos) {
     "extension" as t => { (EXTENSION, newpos($startpos(t)), newpos($endpos(t))) }
     "return" as t => { (RETURN, newpos($startpos(t)), newpos($endpos(t))) }
     "any" as t => { (ANY, newpos($startpos(t)), newpos($endpos(t))) }
+    "self" as t => { (SELF, newpos($startpos(t)), newpos($endpos(t))) }
+    "Self" as t => { (USELF, newpos($startpos(t)), newpos($endpos(t))) }
     (['a'-'z' '_'] ['A'-'Z' 'a'-'z' '_' '0'-'9' '\'']*) as t => { (LCID(t), newpos($startpos(t)), newpos($endpos(t))) }
     (['A'-'Z'] ['A'-'Z' 'a'-'z' '_' '0'-'9' '\'']*) as t => { (UCID(t), newpos($startpos(t)), newpos($endpos(t))) }
     "->" as t => { (ARROW, newpos($startpos(t)), newpos($endpos(t))) }

@@ -3,25 +3,45 @@ enum Type {
   Bool
   String
   Unit
+  Self
   UDT(String)
   Function(Array[Type], Type)
 } derive(Show)
 
 
+enum ArgExpr {
+  Positional(Expr)
+  Named(String, Expr)
+} derive(Show)
+
+enum ParamExpr {
+  Unlabeled(String, Type)
+  Labeled(String, String, Type)
+} derive(Show)
+
+enum FuncSig {
+  Plain(String, Array[ParamExpr], Type) // name, args (name, label, type), return type
+} derive(Show)
+
 enum Expr {
   IntLit(Int)
   BoolLit(Bool)
   StringLit(String)
+  Self
   Variable(String)
-  Call(Expr, Array[Expr])
-  If(Expr, Expr, Expr)
-  Let(Expr, Expr)
+  Call(Expr, Array[ArgExpr])
+  Access(Expr, Expr)
+  IfElse(Expr, StmtList, StmtList)
+  If(Expr, StmtList)
+  Function(Array[ParamExpr], Type, StmtList)
 } derive(Show)
 
 enum Decl {
   Variable(String, Type, Expr)
-  Function(String, Array[(String, Type)], Type, Array[Stmt])
-  Struct(String, Array[(String, Type)], Array[Decl])
+  FuncDef(FuncSig, StmtList)
+  FuncDecl(FuncSig)
+  Field(String, Type)
+  Struct(String, Array[Decl])
   Protocol(String, Array[Decl])
 } derive(Show)
 
@@ -30,4 +50,9 @@ enum Stmt {
   Expr(Expr)
 } derive(Show)
 
-type Program = Array[Stmt]
+enum StmtList {
+  Stmt(Stmt)
+  StmtList(Stmt, StmtList)
+} derive(Show)
+
+type Program =  StmtList

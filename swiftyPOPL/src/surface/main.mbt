@@ -33,7 +33,7 @@ fn main {
       let fname = argv[0]
       let tokens = parse_file(fname)
       let prog = parse_program(tokens)
-      println("Parsed program: \{prog[0]}")
+      println("Parsed program: \{prog}")
     }
   } catch {
     ErrorWithInfo((msg, info)) =>

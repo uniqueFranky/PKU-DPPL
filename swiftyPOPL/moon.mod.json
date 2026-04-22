@@ -10,5 +10,5 @@
   },
   "license": "MIT",
   "source": ".",
-  "warn-list": "-6-7"
+  "warn-list": "-2-6-7-20-23-27"
 }
