@@ -168,7 +168,8 @@ type_param
             None => TypeParam::Generic($1)
         }
       }
-
+    ;
+    
 type_param_list
   : type_param_list COMMA type_param
       { [].add($1).add([$3]) }
