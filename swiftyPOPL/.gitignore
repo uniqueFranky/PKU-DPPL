@@ -3,3 +3,4 @@ _build
 parser.mbt
 lexer.mbt
 parser.mbt.map.json
+.vscode
