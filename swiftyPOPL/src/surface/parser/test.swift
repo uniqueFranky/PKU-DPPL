@@ -20,9 +20,14 @@ f<T1, T2>(x)
 
 S(x: 123, y: false)
 
+func f(_ x: Int, y: Bool, z z: String) -> Int {
+    x
+}
 
 struct S
 
 struct S {
     let x: Int
 }
+
+s.fun(x: 123)

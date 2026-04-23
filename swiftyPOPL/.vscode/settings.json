@@ -1,1 +1,13 @@
-{}
+{
+  "latex-workshop.formatting.latex": "latexindent",
+  "latex-workshop.formatting.latexindent.args": [
+    "-c", "%DIR%/",
+    "%TMPFILE%",
+    "-y", "defaultIndent: '  '"
+  ],
+  "latex-workshop.formatting.latexindent.path": "/data/data_public/yrb/bins/latexindent-wrapper",
+  "terminal.integrated.env.linux": {
+    "PERL5LIB": "/home/uniquefranky/perl5/lib/perl5",
+    "PATH": "/home/uniquefranky/perl5/bin:/home/uniquefranky/bin:${env:PATH}"
+  }
+}

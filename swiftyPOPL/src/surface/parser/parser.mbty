@@ -62,9 +62,13 @@
 %type<Array[ArgExpr]>                 arg_list
 %type<Array[ArgExpr]>                 arg_list_opt
 
-%type<ParamExpr>                      param_expr
-%type<Array[ParamExpr]>               param_list
-%type<Array[ParamExpr]>               param_list_opt
+%type<ParamDecl>                      param_decl
+%type<Array[ParamDecl]>               param_decl_list
+%type<Array[ParamDecl]>               param_decl_list_opt
+
+%type<ParamSig>                       param_sig
+%type<Array[ParamSig]>                param_sig_list
+%type<Array[ParamSig]>                param_sig_list_opt
 
 %type<TypeParam>                      type_param
 %type<Array[TypeParam]>               type_param_list
@@ -74,8 +78,6 @@
 %type<Array[TypeParam]>               generic_params_opt
 
 %type<Array[Type]>                    type_list
-%type<Array[Type]>                    type_tuple
-%type<FuncSig>                        func_sig
 %type<Option[StmtList]>               func_body_opt
 
 %type<Type>                           type
@@ -102,34 +104,36 @@ stmt_list
       { StmtList::Stmt($1) }
   ;
 
-/* --- Parameters & Arguments --- */
+/* --- Parameter Declarations & Arguments --- */
 
-param_expr
+param_decl
   : LCID LCID COLON type
-      { ParamExpr::Labeled($1, $2, $4) }
+      { ParamDecl::ParamDecl(Some($1), $2, $4) }
   | LCID COLON type
-      { ParamExpr::Unlabeled($1, $3) }
+      { ParamDecl::ParamDecl(None, $1, $3) }
+  | USCORE LCID COLON type
+      { ParamDecl::ParamDecl(None, $2, $4) }
   ;
 
-param_list
-  : param_list COMMA param_expr
+param_decl_list
+  : param_decl_list COMMA param_decl
       { [].add($1).add([$3]) }
-  | param_expr
+  | param_decl
       { [$1] }
   ;
 
-param_list_opt
-  : LPAREN param_list RPAREN
+param_decl_list_opt
+  : LPAREN param_decl_list RPAREN
       { $2 }
   | LPAREN RPAREN
       { [] }
   ;
 
 arg_expr
-  : expr
-      { ArgExpr::Positional($1) }
-  | LCID COLON expr
+  : LCID COLON expr
       { ArgExpr::Named($1, $3) }
+  | expr
+      { ArgExpr::Positional($1) }
   ;
 
 arg_list
@@ -146,6 +150,31 @@ arg_list_opt
       { [] }
   ;
 
+/* --- Function Type Parameter Signatures --- */
+
+param_sig
+  : LCID COLON type
+      { ParamSig::ParamSig(Some($1), $3) }
+  | USCORE COLON type
+      { ParamSig::ParamSig(None, $3) }
+  | type
+      { ParamSig::ParamSig(None, $1) }
+  ;
+
+param_sig_list
+  : param_sig_list COMMA param_sig
+      { [].add($1).add([$3]) }
+  | param_sig
+      { [$1] }
+  ;
+
+param_sig_list_opt
+  : LPAREN param_sig_list RPAREN
+      { $2 }
+  | LPAREN RPAREN
+      { [] }
+  ;
+
 /* --- Generics --- */
 
 type_constraint_list
@@ -154,6 +183,7 @@ type_constraint_list
   | type
       { [$1] }
   ;
+
 type_constraint_list_opt
   : COLON type_constraint_list
       { Some($2) }
@@ -165,12 +195,12 @@ type_param
   : UCID type_constraint_list_opt
       { 
         match $2 {
-            Some(c) => TypeParam::Constrained($1, c)
-            None => TypeParam::Generic($1)
+          Some(c) => TypeParam::Constrained($1, c)
+          None => TypeParam::Generic($1)
         }
       }
-    ;
-    
+  ;
+
 type_param_list
   : type_param_list COMMA type_param
       { [].add($1).add([$3]) }
@@ -194,8 +224,9 @@ generic_params_opt
 
 init_expr_opt
   : EQ expr
-    { Some($2) }
-  | { None }
+      { Some($2) }
+  | 
+      { None }
   ;
 
 decl
@@ -206,18 +237,20 @@ decl
           None => Decl::Field($2, $4)
         }
       }
-  | FUNC func_sig func_body_opt
+  | FUNC LCID generic_params_opt param_decl_list_opt ARROW type func_body_opt
       {
-        match $3 {
-          Some(body) => Decl::FuncDef($2, body)
-          None => Decl::FuncDecl($2)
+        match $7 {
+          Some(body) => Decl::FuncDef($2, $3, $4, $6, body)
+          None => Decl::FuncDecl(
+            FuncSig::Sig($2, $3, to_param_sigs($4), $6)
+          )
         }
       }
   | STRUCT UCID decl_list_opt
       { 
         match $3 {
-            Some(body) => Decl::StructDef($2, body)
-            None => Decl::StructDecl($2)
+          Some(body) => Decl::StructDef($2, body)
+          None => Decl::StructDecl($2)
         }
       }
   | PROTOCOL UCID LCURLY decl_list RCURLY
@@ -228,8 +261,9 @@ decl
 
 decl_list_opt
   : LCURLY decl_list RCURLY
-    { Some($2) }
-  | { None }
+      { Some($2) }
+  | 
+      { None }
   ;
 
 func_body_opt
@@ -246,11 +280,6 @@ decl_list
       { [$1] }
   ;
 
-func_sig
-  : LCID generic_params_opt param_list_opt ARROW type
-      { FuncSig::Sig($1, $2, $3, $5) }
-  ;
-
 /* --- Expressions --- */
 
 expr
@@ -258,7 +287,7 @@ expr
       { Expr::If($2, $4) }
   | IF expr LCURLY stmt_list RCURLY ELSE LCURLY stmt_list RCURLY
       { Expr::IfElse($2, $4, $8) }
-  | FUNC generic_params_opt param_list_opt ARROW type LCURLY stmt_list RCURLY
+  | FUNC generic_params_opt param_decl_list_opt ARROW type LCURLY stmt_list RCURLY
       { Expr::Function($2, $3, $5, $7) }
   | postfix_expr
       { $1 }
@@ -268,7 +297,7 @@ postfix_expr
   : atom_expr
       { $1 }
   | UCID arg_list_opt
-      { Expr::Construct($1, $2) }    
+      { Expr::Construct($1, $2) }
   | postfix_expr arg_list_opt
       { Expr::Call($1, $2) }
   | postfix_expr DOT LCID
@@ -303,19 +332,12 @@ type_list
       { [$1] }
   ;
 
-type_tuple
-  : LPAREN type_list RPAREN
-      { $2 }
-  | LPAREN RPAREN
-      { [] }
-  ;
-
 type
   : atomic_type
       { $1 }
   | atomic_type ARROW type
-      { Type::Function([], [$1], $3) }
-  | generic_params_opt type_tuple ARROW type
+      { Type::Function([], [ParamSig::ParamSig(None, $1)], $3) }
+  | generic_params_opt param_sig_list_opt ARROW type
       { Type::Function($1, $2, $4) }
   ;
 

@@ -1,33 +1,36 @@
-enum Type {
+pub enum Type {
   Int
   Bool
   String
   Unit
   Self
   UDT(String)
-  Function(Array[TypeParam], Array[Type], Type) 
-} derive(Show)
+  Function(Array[TypeParam], Array[ParamSig], Type) 
+} derive(Show, Hash, Eq)
 
-enum ArgExpr {
+pub enum ArgExpr {
   Positional(Expr)
   Named(String, Expr)
 } derive(Show)
 
-enum ParamExpr {
-  Unlabeled(String, Type)
-  Labeled(String, String, Type)
+pub enum ParamDecl {
+  ParamDecl(Option[String], String, Type)
 } derive(Show)
 
-enum TypeParam {
+pub enum ParamSig {
+  ParamSig(Option[String], Type)
+} derive(Show, Hash, Eq)
+
+pub enum TypeParam {
   Generic(String)
   Constrained(String, Array[Type])
-} derive(Show)
+} derive(Show, Hash, Eq)
 
-enum FuncSig {
-  Sig(String, Array[TypeParam], Array[ParamExpr], Type)
-} derive(Show)
+pub enum FuncSig {
+  Sig(String, Array[TypeParam], Array[ParamSig], Type)
+} derive(Show, Hash, Eq)
 
-enum Expr {
+pub enum Expr {
   IntLit(Int)
   BoolLit(Bool)
   StringLit(String)
@@ -39,12 +42,12 @@ enum Expr {
   Access(Expr, String)
   IfElse(Expr, StmtList, StmtList)
   If(Expr, StmtList)
-  Function(Array[TypeParam], Array[ParamExpr], Type, StmtList)
+  Function(Array[TypeParam], Array[ParamDecl], Type, StmtList)
 } derive(Show)
 
-enum Decl {
+pub enum Decl {
   Variable(String, Type, Expr)
-  FuncDef(FuncSig, StmtList)
+  FuncDef(String, Array[TypeParam], Array[ParamDecl], Type, StmtList)
   FuncDecl(FuncSig)
   Field(String, Type)
   StructDef(String, Array[Decl])
@@ -53,14 +56,15 @@ enum Decl {
   Extension(Type, String, Array[Decl]) 
 } derive(Show)
 
-enum Stmt {
+
+pub enum Stmt {
   Decl(Decl)
   Expr(Expr)
 } derive(Show)
 
-enum StmtList {
+pub enum StmtList {
   Stmt(Stmt)
   StmtList(Stmt, StmtList)
 } derive(Show)
 
-type Program = StmtList
+pub type Program = StmtList

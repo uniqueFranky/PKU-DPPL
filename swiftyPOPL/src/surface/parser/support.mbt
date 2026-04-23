@@ -35,4 +35,11 @@ fn[T] error_info(msg : String, info? : Info = UNKNOWN) -> T raise {
   raise ErrorWithInfo((msg, info))
 }
 
+fn to_param_sigs(params: Array[ParamDecl]) -> Array[ParamSig] {
+  match params {
+    [] => []
+    [ParamDecl::ParamDecl(label, _, ty), ..rest] =>
+      [ParamSig::ParamSig(label, ty)].add(to_param_sigs([..rest]))
+  }
+}
 
