@@ -2,6 +2,7 @@ fn parse_file(fname : String) -> Array[(@syntax.Token, @syntax.Pos, @syntax.Pos)
   try {
     let code = @fs.read_file_to_string(fname)
     let lexer = @syntax.new_lexer(code)
+    @syntax.init_lex(fname)
     let tokens = []
     while true {
       let elem = lexer.next_token()

@@ -126,6 +126,10 @@ pub fn new_lexer(input : String) -> Lexer {
   Lexbuf::from_string(input)
 }
 
+pub fn init_lex(fname : String) -> Unit {
+  reset_lex(fname)
+}
+
 pub fn Lexer::next_token(self : Lexer) -> (Token, Pos, Pos) {
   token(self.0)
 }

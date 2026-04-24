@@ -232,31 +232,35 @@ init_expr_opt
 decl
   : LET LCID COLON type init_expr_opt
       { 
+        let info = FI($startpos, $endpos)
         match $5 {
-          Some(e) => Decl::Variable($2, $4, e)
-          None => Decl::Field($2, $4)
+          Some(e) => Decl::Variable(info, $2, $4, e)
+          None => Decl::Field(info, $2, $4)
         }
       }
   | FUNC LCID generic_params_opt param_decl_list_opt ARROW type func_body_opt
       {
+        let info = FI($startpos, $endpos)
         match $7 {
-          Some(body) => Decl::FuncDef($2, $3, $4, $6, body)
+          Some(body) => Decl::FuncDef(info, $2, $3, $4, $6, body)
           None => Decl::FuncDecl(
+            info,
             FuncSig::Sig($2, $3, to_param_sigs($4), $6)
           )
         }
       }
   | STRUCT UCID decl_list_opt
       { 
+        let info = FI($startpos, $endpos)
         match $3 {
-          Some(body) => Decl::StructDef($2, body)
-          None => Decl::StructDecl($2)
+          Some(body) => Decl::StructDef(info, $2, body)
+          None => Decl::StructDecl(info, $2)
         }
       }
   | PROTOCOL UCID LCURLY decl_list RCURLY
-      { Decl::Protocol($2, $4) }
+      { Decl::Protocol(FI($startpos, $endpos), $2, $4) }
   | EXTENSION type COLON UCID LCURLY decl_list RCURLY
-      { Decl::Extension($2, $4, $6) }
+      { Decl::Extension(FI($startpos, $endpos), $2, $4, $6) }
   ;
 
 decl_list_opt
@@ -284,11 +288,11 @@ decl_list
 
 expr
   : IF expr LCURLY stmt_list RCURLY
-      { Expr::If($2, $4) }
+      { Expr::If(FI($startpos, $endpos), $2, $4) }
   | IF expr LCURLY stmt_list RCURLY ELSE LCURLY stmt_list RCURLY
-      { Expr::IfElse($2, $4, $8) }
+      { Expr::IfElse(FI($startpos, $endpos), $2, $4, $8) }
   | FUNC generic_params_opt param_decl_list_opt ARROW type LCURLY stmt_list RCURLY
-      { Expr::Function($2, $3, $5, $7) }
+      { Expr::Function(FI($startpos, $endpos), $2, $3, $5, $7) }
   | postfix_expr
       { $1 }
   ;
@@ -297,28 +301,28 @@ postfix_expr
   : atom_expr
       { $1 }
   | UCID arg_list_opt
-      { Expr::Construct($1, $2) }
+      { Expr::Construct(FI($startpos, $endpos), $1, $2) }
   | postfix_expr arg_list_opt
-      { Expr::Call($1, $2) }
+      { Expr::Call(FI($startpos, $endpos), $1, $2) }
   | postfix_expr DOT LCID
-      { Expr::Access($1, $3) }
+      { Expr::Access(FI($startpos, $endpos), $1, $3) }
   | postfix_expr LT type_list GT
-      { Expr::GenericInst($1, $3) }
+      { Expr::GenericInst(FI($startpos, $endpos), $1, $3) }
   ;
 
 atom_expr
   : INTV
-      { Expr::IntLit($1) }
+      { Expr::IntLit(FI($startpos, $endpos), $1) }
   | FALSE
-      { Expr::BoolLit(false) }
+      { Expr::BoolLit(FI($startpos, $endpos), false) }
   | TRUE
-      { Expr::BoolLit(true) }
+      { Expr::BoolLit(FI($startpos, $endpos), true) }
   | STRINGV
-      { Expr::StringLit($1) }
+      { Expr::StringLit(FI($startpos, $endpos), $1) }
   | LCID
-      { Expr::Ident($1) }
+      { Expr::Ident(FI($startpos, $endpos), $1) }
   | SELF
-      { Expr::Self }
+      { Expr::Self(FI($startpos, $endpos)) }
   | LPAREN expr RPAREN
       { $2 }
   ;
