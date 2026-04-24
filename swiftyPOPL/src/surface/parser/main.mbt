@@ -32,10 +32,11 @@ fn main {
       let fname = argv[0]
       let tokens = parse_file(fname)
       let prog = parse_program(tokens)
-      println("Parsed program: \{prog}")
+      let resolved = @resolver.resolve(prog)
+      println("Resolved program: \{resolved}")
     }
   } catch {
-    _ => panic()
+    e => println("Error: \{e}")
   }
 }
 

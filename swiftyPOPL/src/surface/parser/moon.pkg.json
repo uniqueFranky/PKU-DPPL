@@ -5,6 +5,7 @@
     "moonbitlang/core/strconv",
     "moonbitlang/x/fs",
     "moonbitlang/x/sys",
+    "swifty/surface/parser/resolver",
     "swifty/surface/parser/syntax"
   ]
 }
