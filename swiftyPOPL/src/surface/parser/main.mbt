@@ -1,14 +1,13 @@
-fn parse_file(fname : String) -> Array[(Token, Pos, Pos)] raise {
+fn parse_file(fname : String) -> Array[(@syntax.Token, @syntax.Pos, @syntax.Pos)] raise {
   try {
     let code = @fs.read_file_to_string(fname)
-    let lexer = new_lexer(code)
-    reset_lex(fname)
+    let lexer = @syntax.new_lexer(code)
     let tokens = []
     while true {
       let elem = lexer.next_token()
       tokens.push(elem)
       match elem.0 {
-        EOF => break
+        @syntax.EOF => break
         _ => continue
       }
     }
@@ -18,9 +17,8 @@ fn parse_file(fname : String) -> Array[(Token, Pos, Pos)] raise {
   }
 }
 
-fn parse_program(tokens : Array[(Token, Pos, Pos)]) -> Program raise {
-  program(tokens)
-
+fn parse_program(tokens : Array[(@syntax.Token, @syntax.Pos, @syntax.Pos)]) -> @syntax.Program raise {
+  @syntax.program(tokens)
 }
 
 
@@ -28,7 +26,7 @@ fn main {
   let argv = @sys.get_cli_args()[1:]
   try {
     if argv.length() != 1 {
-      error_info("you must specify exactly one input file")
+      println("you must specify exactly one input file")
     } else {
       let fname = argv[0]
       let tokens = parse_file(fname)
@@ -36,10 +34,6 @@ fn main {
       println("Parsed program: \{prog}")
     }
   } catch {
-    ErrorWithInfo((msg, info)) =>
-      if not(msg.is_empty()) {
-        println("Error:\{info} \{msg}")
-      }
     _ => panic()
   }
 }

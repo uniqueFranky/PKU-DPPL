@@ -1,0 +1,19 @@
+{
+  "is-main": false,
+  "import": [
+    "moonbitlang/core/list",
+    "moonbitlang/core/strconv"
+  ],
+  "pre-build": [
+    {
+      "command": "node $mod_dir/.mooncakes/moonbitlang/yacc/boot/moonyacc.cjs $input -o $output",
+      "input": "parser.mbty",
+      "output": "parser.mbt"
+    },
+    {
+      "command": "$mod_dir/.mooncakes/moonbitlang/lex/moonlex $input -o $output",
+      "input": "lexer.mbtx",
+      "output": "lexer.mbt"
+    }
+  ]
+}

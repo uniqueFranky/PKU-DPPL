@@ -1,0 +1,3 @@
+fn resolve(program: @syntax.Program) -> Unit {
+  ...
+}
