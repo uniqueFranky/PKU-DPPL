@@ -33,9 +33,11 @@ fn main {
       let tokens = parse_file(fname)
       let prog = parse_program(tokens)
       let resolved = @resolver.resolve(prog)
-      println("Resolved program: \{resolved}")
+      let typed = @checker.check(resolved)
+      println("Typed program: \{typed}")
     }
   } catch {
+    @checker.TypeError(msg) => println("TypeError: \{msg}")
     e => println("Error: \{e}")
   }
 }

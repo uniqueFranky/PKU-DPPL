@@ -3,6 +3,7 @@
   "import": [
     "moonbitlang/core/list",
     "moonbitlang/core/strconv",
+    "swifty/surface/parser/checker",
     "moonbitlang/x/fs",
     "moonbitlang/x/sys",
     "swifty/surface/parser/resolver",

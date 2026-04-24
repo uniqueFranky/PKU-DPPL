@@ -1,0 +1,8 @@
+{
+  "is-main": false,
+  "import": [
+    "moonbitlang/core/list",
+    "moonbitlang/core/strconv",
+    "swifty/surface/parser/resolver"
+  ]
+}

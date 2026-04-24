@@ -1,4 +1,4 @@
-pub enum ResolvedType {
+pub(all) enum ResolvedType {
   Int
   Bool
   String
@@ -10,24 +10,24 @@ pub enum ResolvedType {
   Function(Array[ResolvedTypeParam], Array[ResolvedParamSig], ResolvedType)
 } derive(Show)
 
-pub enum ResolvedTypeParam {
+pub(all) enum ResolvedTypeParam {
   Generic(String)
   Constrained(String, Array[ResolvedType])
 } derive(Show)
 
-pub enum ResolvedParamDecl {
+pub(all) enum ResolvedParamDecl {
   ParamDecl(Option[String], String, ResolvedType)
 } derive(Show)
 
-pub enum ResolvedParamSig {
+pub(all) enum ResolvedParamSig {
   ParamSig(Option[String], ResolvedType)
 } derive(Show)
 
-pub enum ResolvedFuncSig {
+pub(all) enum ResolvedFuncSig {
   Sig(String, Array[ResolvedTypeParam], Array[ResolvedParamSig], ResolvedType)
 } derive(Show)
 
-pub enum ResolvedExpr {
+pub(all) enum ResolvedExpr {
   IntLit(Int)
   BoolLit(Bool)
   StringLit(String)
@@ -47,12 +47,12 @@ pub enum ResolvedExpr {
   )
 } derive(Show)
 
-pub enum ResolvedArgExpr {
+pub(all) enum ResolvedArgExpr {
   Positional(ResolvedExpr)
   Named(String, ResolvedExpr)
 } derive(Show)
 
-pub enum ResolvedDecl {
+pub(all) enum ResolvedDecl {
   Variable(String, ResolvedType, ResolvedExpr)
   Field(String, ResolvedType)
   FunctionDef(
@@ -77,7 +77,7 @@ pub enum ResolvedDecl {
   Extension(String, String, Array[ResolvedDecl])
 } derive(Show)
 
-pub enum ResolvedStmt {
+pub(all) enum ResolvedStmt {
   Decl(ResolvedDecl)
   Expr(ResolvedExpr)
 } derive(Show)
