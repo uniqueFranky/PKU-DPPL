@@ -1,0 +1,192 @@
+\documentclass[manuscript]{acmart}
+
+\AtBeginDocument{%
+  \providecommand\BibTeX{{%
+    Bib\TeX}}}
+
+\setcopyright{none}
+
+\usepackage{array}
+\usepackage{mathtools}
+\usepackage{stmaryrd}
+\usepackage{mathpartir}
+
+
+\begin{document}
+
+\title{Midterm Test for Design Principles of Programming Languages}
+
+\author{Runbang Yan}
+\email{rbyan25@stu.pku.edu.cn}
+\affiliation{%
+  \institution{School of Computer Science, Peking University}
+  \city{Beijing}
+  \country{China}
+}
+
+\renewcommand{\shortauthors}{Yan}
+
+\maketitle
+
+\section{The Variance of State}
+\subsection{Unsafety of Covariant Reference Rules}
+Consider the following term:
+
+$$
+\text{let}\ a = \text{ref} \{x: 1, y: 2\}\ \text{in}\ 
+\text{let}\ f = (\lambda r: \text{Ref}\{x: Nat\}. r := \{x: 3\})\ \text{in}\ \text{let}\ \_\ =(f\ a)\ \text{in}\ (!a).y
+$$
+
+This term is well-typed, witnessed by the following typing derivation:
+
+\begin{mathpar}
+
+    \inferrule*
+    { \Gamma | \Sigma \vdash f: \text{Ref}\{x: Nat\} \to Unit \\
+      \Gamma | \Sigma \vdash a: \text{Ref}\{x: Nat, y: Nat\} \\
+      \text{Ref}\{x: Nat, y: Nat\} <: \text{Ref}\{x: Nat\} \\
+    }
+    { \Gamma | \Sigma \vdash f\ a: \text{Unit} }
+
+\end{mathpar}
+and
+
+\begin{mathpar}
+
+    \inferrule*
+    {\inferrule*
+    { \Gamma | \Sigma \vdash a: \text{Ref}\{x: Nat, y: Nat\} }
+    { \Gamma | \Sigma \vdash !a: \{x: Nat, y: Nat\} }}
+    {\Gamma | \Sigma \vdash (!a).y: Nat}
+    
+
+\end{mathpar}
+
+However, after evaluating the side effects introduced by $f$, we have $!a$ evaluates to $\{x: 3\}$, but actually we expect $a$ to have type $\text{Ref}\{x: Nat, y: Nat\}$.
+
+Any attempt to project the field $y$ from $a$ will lead to a runtime error, which violates type safety.
+
+The term $\{x: 3\}.y$, is not a normal form, and cannot be evaluated further, so the \textbf{progress} theorem is violated.
+
+Also, the \textbf{preservation} theorem is violated, because the type of $a$ is expected to be $\text{Ref}\{x: Nat, y: Nat\}$, but after evaluating the side effect, it actually has type $\text{Ref}\{x: Nat\}$.
+
+
+\subsection{Mainstream OOP Language Adopting the Unsafe Rule}
+
+Java adopts the unsafe covariant reference rule for arrays.
+
+To patch the unsafety, Java performs a runtime check when the program attempts to write to an array, to ensure that the actual type of the array is compatible with the type of the value being written (otherwise an \textit{ArrayStoreException} is thrown).
+
+
+\section{Transactional Semantics}
+
+\subsection{Small-Step Operational Semantics}
+
+Let's first extend the syntax of terms to include transactions:
+
+$$
+\begin{array}{rll}
+t ::= & \cdots & \text{existing terms} \\
+& \text{transaction}\ t & \text{transaction block} \\
+& \text{tx\_eval}\ (t, \mu) & \text{evaluate transaction block with initial state } \mu \\
+\end{array}
+$$
+
+Then we can define the small-step operational semantics for transactions as follows:
+
+\begin{mathpar}
+\inferrule*[right=\textsc{E-Transaction-Begin}]
+{ }
+{ \text{transaction}\ t \mid \mu \to \text{tx\_eval}(t, \mu)\mid \mu}
+
+\inferrule*[right=\textsc{E-Transaction-Step}]
+{ t \mid \mu \to t' \mid \mu' }
+{ \text{tx\_eval}(t, \mu_0) \mid \mu \to \text{tx\_eval}(t', \mu_0) \mid \mu' }
+
+\inferrule*[right=\textsc{E-Transaction-Commit}]
+{  }
+{ \text{tx\_eval}(v, \mu_0) \mid \mu \to v \mid \mu }
+
+\inferrule*[right=\textsc{E-Transaction-Rollback}]
+{  }
+{ \text{tx\_eval}(\text{raise}\ v, \mu_0) \mid \mu \to \text{raise}\ v \mid \mu_0 }
+
+\end{mathpar}
+
+\subsection{Challenges for Proving Preservation Theorem}
+
+The preservation theorem regarding the typing store lemma states that, if $\Sigma \models \mu$, and $t \mid \mu \to t' \mid \mu'$, then there exists $\Sigma' \supseteq \Sigma$ such that $\Sigma' \models \mu'$.
+
+The theorem expects the typing store $\Sigma$ to be monotonically increasing, meaning that the store can only grow as the program executes, but never shrinks.
+
+However, if we try to allocate a new location in the transaction block, and the transaction finally rolls back, the store will shrink back to its original state, which violates the monotonicity requirement of the typing store.
+
+What's more, $tx\_eval$ terms are related to both the original store and the current store, so we need to find a proper way to clarify their relationship.
+
+\section{Modeling Modern Control Flow}
+\subsection{Static Typing Rules for Unwrapping}
+
+\begin{mathpar}
+\inferrule*[right=\textsc{T-Ok}]
+{ \Gamma\vdash t: T}
+{ \Gamma\vdash \text{ok}(t): \text{Ok}(T) }
+
+\inferrule*[right=\textsc{T-Err}]
+{ \Gamma\vdash t: T_{err} \\
+    T_{err} \text{ is a fixed error type for the current scope }}
+{ \Gamma\vdash \text{err}(t): \text{Err}(T_{err}) }
+
+\inferrule*[right=\textsc{T-Unwrap}]
+{ \Gamma\vdash t: \text{Ok}(T) | \text{Err}(T_{err}) }
+{ \Gamma\vdash t?: T }
+
+\end{mathpar}
+
+\subsection{Operational Semantics for Unwrapping}
+Beyond the syllabus. (Approved by the TA)
+
+\section{Gradual Typing Interface}
+
+\subsection{Operational Semantics for \textit{as} terms}
+In STLC, the types of values are statically determined, so we can define function $typeOf(v)$ to return the type of a value $v$.
+
+Then we can define the operational semantics for \textit{as} terms as follows:
+
+\begin{mathpar}
+\inferrule*[right=\textsc{E-As-Step}]
+{ t \to t' }
+{ t\ \text{as}\ T \to t'\ \text{as}\ T }
+
+\inferrule*[right=\textsc{E-As-Dyn-Idempotence}]
+{  }
+{ t\ \text{as}\ Dyn\ \text{as}\ Dyn \to t\ \text{as}\ Dyn }
+
+\inferrule*[right=\textsc{E-Downcast-Success}]
+{ typeOf(v) = T }
+{ v\ \text{as}\ Dyn\ \text{as}\ T \to v }
+
+\inferrule*[right=\textsc{E-Downcast-Failure}]
+{ typeOf(v) \neq T }
+{ v\ \text{as}\ Dyn\ \text{as}\ T \to error }
+
+\end{mathpar}
+
+\subsection{The Progress Theorem}
+
+The standard progress theorem states that, if $\Gamma\vdash t: T$, then either $t$ is a value, or there exists $t'$ such that $t \to t'$.
+
+However, in the presence of gradual typing, consider the term $true\ \text{as}\ Dyn\ \text{as}\ Nat$.
+
+According to the typing rules, the term is well-typed, but evaluates to an error, which is not a value, and cannot step further.
+
+We can restate the progress theorem as follows: if $\Gamma\vdash t: T$, then one of the following states holds:
+\begin{itemize}
+    \item $t$ is a value, or
+    \item $t$ is an error, or
+    \item there exists $t'$ such that $t \to t'$.
+\end{itemize}
+
+\end{document}
+\endinput
+%%
+%% End of file.
