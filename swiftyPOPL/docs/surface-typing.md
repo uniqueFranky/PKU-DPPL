@@ -78,7 +78,7 @@ forall X_i : P_i. (label_j : tau_j) -> tau
 - `protocol`
 - `extension S : P`
 
-注意：实现当前还没有完整解析/检查 `any P`，但类型系统中保留它，因为这是项目目标里 existential abstraction 的 surface 构造。
+注意：当前实现已经有 `any P` 的 parser/resolver/checker/elaborator 基本路径，包括 `e as any P` 打包和受限的 existential method 调用。类型系统仍把 surface 层的 explicit unpack 排除在外，让 elimination 由 elaboration 翻译到 core existential unpack。
 
 ## 4. 环境设计
 
@@ -331,13 +331,27 @@ Psi; Omega; Gamma; rho |- e as any P : any P
 
 这个规则说明：只有当 `tau` 有 `P` 的 conformance evidence 时，才能打包为 `any P`。
 
-后续 elaboration 应该把它翻译为 existential package：
+当前 elaboration 会把它翻译为 existential package：
 
 ```text
 pack [tau, { value = E, dict = D }] as exists X. { value : X, dict : Dict[P, X] }
 ```
 
 目前不定义 surface-level unpack。这样可以让 existential elimination 留在 IR/core 中，由 elaboration 控制。
+
+对 `any P` 的 method access 是受限 elimination。若 protocol method 的可见签名中不泄漏抽象 `Self`，checker 可以把：
+
+```swift
+s.show()
+```
+
+解析为 existential method，并由 elaborator 翻译为：
+
+```text
+unpack s as {X, opened} in opened.dict.show(opened.value)
+```
+
+若 method 的返回类型或显式参数类型包含 protocol 中的抽象 `Self`，例如 `func clone() -> Self`，则当前 checker 会拒绝对 `any P` 的该方法调用。这个限制对应 Swift existential 的安全子集：打开 package 后的 witness type 不能逃逸到 surface 可见类型中。
 
 ## 10. Statement Sequence Typing
 
@@ -551,11 +565,12 @@ well-typed surface program cannot elaborate to a stuck core program
 
 ## 15. 与当前实现的关系
 
-当前实现已经基本对应这个类型系统的无 `any P` 子集：
+当前实现已经基本对应这个类型系统的主要子集：
 
 - `ResolvedType::StructType` 对应 surface `S`
 - `ResolvedType::TypeVariable` 对应 `X`
 - `ResolvedType::AbstractSelfType(P)` 对应 protocol 中未替换的 `Self`
+- `ResolvedType::ExistentialProtocol(P)` 对应 `any P`
 - `ResolvedType::Function` 对应 function scheme
 - `Env.structs` 对应 `Psi_S`
 - `Env.protocols` 对应 `Psi_P`
@@ -563,24 +578,29 @@ well-typed surface program cannot elaborate to a stuck core program
 - `Env.ext_methods` 和 struct methods 对应 `Psi_M`
 - `Env.top_values` 对应 `Psi_V`
 - `type_constraints` 对应 `Omega`
+- `TypedExpr::As` 对应 `T-AsAny`
+- `MemberResolution::ExistentialMethod` 对应受限的 existential method elimination
+
+工程实现现在直接从 `TypedAST` 生成 core concrete syntax string，再复用 core parser/typechecker/evaluator。也就是说，文档中的 IR 层目前仍是推荐的证明结构，而不是仓库中的独立 AST。
 
 当前尚未覆盖或需要后续实现的部分：
 
-1. `any P` 的 parser/resolver/checker 支持。
-2. 字典 evidence 的显式 IR 表示。
-3. `TypedAST -> IR` elaboration。
-4. `IR -> core.Term` lowering。
+1. 独立 IR AST 与 IR typing rules。
+2. 字典 evidence 的显式 IR 表示，而不是只体现在 generated core string 中。
+3. `TypedAST -> IR` elaboration preservation 证明。
+4. `IR -> core.Term` lowering 证明。
 5. 结构化错误和源码位置。
+6. existential generic method 的设计与实现取舍。
 
 ## 16. 后续建议
 
 短期建议：
 
 1. 保持 `typing.tex` 作为规范文档，不要让它追随实现中的所有临时细节。
-2. 新增 IR AST，先覆盖无 existential 的 dictionary-passing 子集。
+2. 新增 IR AST，覆盖当前已经实现的 dictionary-passing 与 existential 子集。
 3. 给 IR 写 typing rules，再补一份 `docs/ir-typing.md`。
 4. 实现 `TypedAST -> IR` 后，用 pretty-printer 对照 `typing.tex` 的 elaboration intuition。
-5. 最后加入 `any P`，把它落到 existential package。
+5. 把当前 string-based elaborator 逐步改造成 `TypedAST -> IR -> core syntax/core term`，降低手写 de Bruijn 和字符串 escaping 的风险。
 
 这样项目结构会比较清晰：
 

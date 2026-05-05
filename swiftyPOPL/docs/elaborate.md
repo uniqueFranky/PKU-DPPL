@@ -56,7 +56,7 @@ pub fn run_string(code : String, fname? : String = "<elaborated>") -> Unit raise
 
 ## 3. 当前支持范围
 
-当前 elaborator 覆盖 checker 已支持的大部分非 existential 子集：
+当前 elaborator 覆盖 checker 已支持的大部分核心子集：
 
 - `Int` -> core `Nat`
 - `Bool`
@@ -74,14 +74,18 @@ pub fn run_string(code : String, fname? : String = "<elaborated>") -> Unit raise
 - `extension S: P` -> protocol dictionary value
 - concrete protocol method call -> dictionary projection + function application
 - constrained generic dictionary parameter insertion
+- `any P` type -> core existential type
+- `e as any P` -> existential package with value and dictionary evidence
+- method call on `any P` -> core existential unpack + dictionary method call
+
+`any P` 的当前实现是受限的 existential elimination：surface 语言仍不暴露显式 `unpack`，checker 只允许调用不在可见签名中泄漏 `Self` 的 existential method。这样可以避免从 `any P` 中返回抽象 `Self` 后在 surface 层失去可表达类型。
 
 当前暂未支持：
 
-- `any P`，因为 surface parser/checker 还没有对应 AST
-- method call on existential package
+- generic method instantiation on existential package
 - robust string escaping
 - complete source-level diagnostic mapping after elaboration
-- automatic execution from `src/surface/parser/main.mbt`，该入口目前只打印 typed program 和 core syntax
+- automatic execution from `src/surface/parser/main.mbt`，该入口目前只打印 typed program 和 core syntax；直接执行请使用根级 `src/interpreter.mbt`
 
 ## 4. 类型翻译
 
@@ -316,7 +320,66 @@ Core：
 (lambda _:Unit. rest) (expr)
 ```
 
-## 10. 根级 Interpreter
+## 10. Existential 翻译
+
+`any P` 被翻译成 core existential：
+
+```text
+{Some X, {value:X, dict:Dict[P, X]}}
+```
+
+其中 dictionary type 由 protocol requirement 生成。例如：
+
+```swift
+protocol Show {
+  func show() -> String
+}
+```
+
+对应的 existential core type 形状为：
+
+```text
+{Some X, {value:X, dict:{show:X->String}}}
+```
+
+打包：
+
+```swift
+let s: any Show = b as any Show
+```
+
+会翻译为：
+
+```text
+{*{x:Nat}, {value=b, dict=dict_Box_Show}} as {Some X, {value:X, dict:{show:X->String}}}
+```
+
+调用 existential method：
+
+```swift
+s.show()
+```
+
+会由 elaborator 控制 unpack：
+
+```text
+let {X, opened_Show} = s in (opened_Show.dict.show opened_Show.value)
+```
+
+checker 会拒绝在 visible signature 中提到 `Self` 的 existential method，例如：
+
+```swift
+protocol Clone {
+  func clone() -> Self
+}
+
+let c: any Clone = b as any Clone
+c.clone()
+```
+
+这类调用当前会在 checker 阶段报错，而不是生成 core。
+
+## 11. 根级 Interpreter
 
 新增 `src/interpreter.mbt` 用于直接执行 SwiftyPOPL 源码。
 
@@ -360,20 +423,19 @@ y = 1
   : String
 ```
 
-## 11. 当前验证
+## 12. 当前验证
 
-已运行：
+最近一次静态检查和样例抽查显示以下路径可用：
 
 ```bash
-moon check src/surface/parser
 moon check .
-moon run src/surface/parser -- test/should_pass/type_checker_success.swift
 moon run src -- test/should_pass/type_checker_success.swift
-moon run src/surface/parser -- test/should_pass/extension_methods.swift
-moon run src/surface/parser -- test/should_pass/struct_basic.swift
+moon run src -- test/should_pass/existential_show_success.swift
+moon run src -- test/should_fail/existential_self_method_rejected.swift
+moon run src -- test/should_pass/generic_type_variables.swift
 ```
 
-`type_checker_success.swift` 的 elaborated core 已进一步写入临时 core 文件，并用现有 core interpreter 验证通过：
+`type_checker_success.swift` 的输出包含 dictionary passing：
 
 ```text
 method_Box_id = lambda T. lambda self:{x:Nat}. lambda x:T. x
@@ -390,17 +452,26 @@ y = 1
   : String
 ```
 
-`generic_type_variables.swift` 目前仍在 checker 阶段报：
+`existential_show_success.swift` 的输出包含 existential package：
 
 ```text
-TypeError: variable type mismatch
+s = {*{x:Nat}, {value={x=1}, dict={show=lambda self:{x:Nat}. "box"}}} as {Some X, {value:X,dict:{show:X->String}}}
+  : {Some X, {value:X,dict:{show:X->String}}}
+"box"
+  : String
 ```
 
-这不是 elaborator 引入的问题。
+`existential_self_method_rejected.swift` 预期失败，当前错误为：
 
-## 12. 已知工程问题
+```text
+TypeError: existential method "clone" mentions Self in its visible signature
+```
 
-### 12.1 Root 包导入 core main package
+注意：仓库目前还没有统一的 should-pass / should-fail 自动测试 runner，`test/` 目录主要是手工样例集合。
+
+## 13. 已知工程问题
+
+### 13.1 Root 包导入 core main package
 
 `moon check .` 当前会提示：
 
@@ -419,7 +490,7 @@ src/core        // CLI main
 
 当前为了避免大规模重构，暂时保留现状。
 
-### 12.2 Core string escaping
+### 13.2 Core string escaping
 
 当前 `string_lit` 只保守支持现有简单字符串测试：
 
@@ -435,28 +506,42 @@ fn string_lit(s : String) -> String {
 - `\`
 - newline
 
-### 12.3 Diagnostics
+### 13.3 Diagnostics
 
 Elaboration 后 core parser/typechecker 报错的位置来自 generated core string，不会自动映射回 source location。
 
 如果后续需要更好的诊断，需要在 TypedAST 中保留 source span，并在 elaborator 中维护 source-to-core mapping。
 
-## 13. 后续建议
+### 13.4 Existential 限制
+
+当前 existential 支持覆盖：
+
+- `any P` 类型解析、检查和 core 类型翻译
+- `e as any P` 打包
+- 非泛型、existential-safe 的 protocol method 调用
+
+仍未覆盖：
+
+- existential package 上的泛型方法实例化
+- surface-level 显式 unpack
+- 更复杂的 `Self`、关联类型、opaque type 等 Swift 特性
+
+## 14. 后续建议
 
 短期建议：
 
 1. 给 elaborator 增加 should-pass 测试脚本，自动比较 elaborated core 是否能被 core interpreter 接受。
-2. 补充 constrained generic 的正向测试样例，确保 dictionary parameter insertion 覆盖 type-variable evidence。
-3. 加入 `any P` 的 parser/checker/elaborator 支持。
+2. 补充 constrained generic 和 existential method 的正向/反向测试样例，确保 dictionary evidence 与 unpack 路径持续可用。
+3. 为 existential generic method 明确设计取舍：要么实现受限实例化，要么在文档中作为明确的 out-of-scope。
 4. 把 core 拆成 reusable library package，消除 root interpreter 导入 main package 的 warning。
 5. 为 generated core string 加 pretty mode，方便论文展示和 debug。
 
 推荐实现顺序：
 
 ```text
-1. Stabilize current no-existential elaboration
-2. Add tests for dictionary passing
-3. Add any P pack
-4. Add existential unpack/method call if needed
+1. Stabilize current dictionary-passing and existential elaboration
+2. Add automated tests for should-pass / should-fail examples
+3. Decide and document existential generic method support
+4. Improve diagnostics and source span preservation
 5. Refactor core package split
 ```
