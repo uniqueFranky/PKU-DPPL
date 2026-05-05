@@ -28,6 +28,12 @@ fn main {
       @core.run_string(core, fname=fname + ".elaborated.core")
     }
   } catch {
+    @syntax.UnexpectedToken(tok, (start, _), expected) =>
+      if argv.length() == 1 {
+        println(@syntax.format_unexpected_token(argv[0], tok, start, expected))
+      } else {
+        println("SyntaxError: \{@syntax.pos_to_string(start)}: unexpected token \{tok}")
+      }
     @elaborator.ElabError(msg) => println("ElabError: \{msg}")
     @checker.TypeError(msg) => println("TypeError: \{msg}")
     e => println("Error: \{e}")

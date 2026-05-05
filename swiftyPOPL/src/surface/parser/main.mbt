@@ -22,7 +22,6 @@ fn parse_program(tokens : Array[(@syntax.Token, @syntax.Pos, @syntax.Pos)]) -> @
   @syntax.program(tokens)
 }
 
-
 fn main {
   let argv = @sys.get_cli_args()[1:]
   try {
@@ -40,6 +39,12 @@ fn main {
       println(core)
     }
   } catch {
+    @syntax.UnexpectedToken(tok, (start, _), expected) =>
+      if argv.length() == 1 {
+        println(@syntax.format_unexpected_token(argv[0], tok, start, expected))
+      } else {
+        println("SyntaxError: \{@syntax.pos_to_string(start)}: unexpected token \{tok}")
+      }
     @elaborator.ElabError(msg) => println("ElabError: \{msg}")
     @checker.TypeError(msg) => println("TypeError: \{msg}")
     e => println("Error: \{e}")
