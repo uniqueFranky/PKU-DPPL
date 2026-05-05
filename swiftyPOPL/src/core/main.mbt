@@ -56,6 +56,23 @@ fn process_file(ctx : Context, fname : String) -> Context raise {
 fn parse_file(ctx : Context, fname : String) -> @list.List[Command] raise {
   try {
     let code = @fs.read_file_to_string(fname)
+    parse_string(ctx, code, fname)
+  } catch {
+    @fs.IOError(_) => error_info("cannot locate file \"\{fname}\"")
+    ErrorWithInfo(_) as e => raise e
+    UnexpectedToken(t, (start, end), _) =>
+      if has_lex_error.val {
+        error_info("")
+      } else {
+        error_info("unexpected token \"\{t}\"", info=FI(start, end))
+      }
+    _ => panic()
+  }
+}
+
+///|
+fn parse_string(ctx : Context, code : String, fname : String) -> @list.List[Command] raise {
+  try {
     let lexer = new_lexer(code)
     reset_lex(fname)
     let tokens = []
@@ -74,7 +91,6 @@ fn parse_file(ctx : Context, fname : String) -> @list.List[Command] raise {
       result(ctx).0
     }
   } catch {
-    @fs.IOError(_) => error_info("cannot locate file \"\{fname}\"")
     ErrorWithInfo(_) as e => raise e
     UnexpectedToken(t, (start, end), _) =>
       if has_lex_error.val {
@@ -84,6 +100,15 @@ fn parse_file(ctx : Context, fname : String) -> @list.List[Command] raise {
       }
     _ => panic()
   }
+}
+
+///|
+pub fn run_string(code : String, fname? : String = "<elaborated>") -> Unit raise {
+  let cmds = parse_string(Context::empty(), code, fname)
+  ignore(loop (Context::empty(), cmds) {
+    (ctx, Empty) => break ctx
+    (ctx, More(c, tail=rest)) => continue (process_command(ctx, c), rest)
+  })
 }
 
 ///|

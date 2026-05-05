@@ -35,10 +35,13 @@ fn main {
       let resolved = @resolver.resolve(prog)
       let typed = @checker.check(resolved)
       println("Typed program: \{typed}")
+      let core = @elaborator.elaborate(typed)
+      println("Elaborated core:")
+      println(core)
     }
   } catch {
+    @elaborator.ElabError(msg) => println("ElabError: \{msg}")
     @checker.TypeError(msg) => println("TypeError: \{msg}")
     e => println("Error: \{e}")
   }
 }
-
