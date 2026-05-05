@@ -45,6 +45,7 @@ fn main {
       } else {
         println("SyntaxError: \{@syntax.pos_to_string(start)}: unexpected token \{tok}")
       }
+    @resolver.ResolveError(msg) => println("ResolveError: \{msg}")
     @elaborator.ElabError(msg) => println("ElabError: \{msg}")
     @checker.TypeError(msg) => println("TypeError: \{msg}")
     e => println("Error: \{e}")

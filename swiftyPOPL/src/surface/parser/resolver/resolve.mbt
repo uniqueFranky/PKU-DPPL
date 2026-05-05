@@ -1,4 +1,4 @@
-priv suberror ResolveError {
+pub suberror ResolveError {
   ResolveError(String)
 }
 
