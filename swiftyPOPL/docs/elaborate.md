@@ -340,7 +340,7 @@ moon run src -- path/to/file.swift
 示例：
 
 ```bash
-moon run src -- src/surface/parser/test/type_checker_success.swift
+moon run src -- test/should_pass/type_checker_success.swift
 ```
 
 输出包含 core 的绑定和最终表达式结果：
@@ -367,10 +367,10 @@ y = 1
 ```bash
 moon check src/surface/parser
 moon check .
-moon run src/surface/parser -- src/surface/parser/test/type_checker_success.swift
-moon run src -- src/surface/parser/test/type_checker_success.swift
-moon run src/surface/parser -- src/surface/parser/test/extension_methods.swift
-moon run src/surface/parser -- src/surface/parser/test/struct_basic.swift
+moon run src/surface/parser -- test/should_pass/type_checker_success.swift
+moon run src -- test/should_pass/type_checker_success.swift
+moon run src/surface/parser -- test/should_pass/extension_methods.swift
+moon run src/surface/parser -- test/should_pass/struct_basic.swift
 ```
 
 `type_checker_success.swift` 的 elaborated core 已进一步写入临时 core 文件，并用现有 core interpreter 验证通过：
