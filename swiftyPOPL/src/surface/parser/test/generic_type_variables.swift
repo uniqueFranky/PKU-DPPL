@@ -3,7 +3,7 @@ protocol P {
 }
 struct Box {
     func foo() -> Self { self }
-    let f: <T: P>(x: T) -> T = func <T: P>(x: T) -> T { x }
+    let f: <T: P>(T) -> T = func <T: P>(x: T) -> T { x }
 }
 
 func id<T>(x: T) -> T { x }
