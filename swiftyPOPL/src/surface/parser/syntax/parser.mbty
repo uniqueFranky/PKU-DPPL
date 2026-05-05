@@ -259,13 +259,19 @@ decl
       }
   | PROTOCOL UCID LCURLY decl_list RCURLY
       { Decl::Protocol(FI($startpos, $endpos), $2, $4) }
+  | PROTOCOL UCID LCURLY RCURLY
+      { Decl::Protocol(FI($startpos, $endpos), $2, []) }
   | EXTENSION type COLON UCID LCURLY decl_list RCURLY
       { Decl::Extension(FI($startpos, $endpos), $2, $4, $6) }
+  | EXTENSION type COLON UCID LCURLY RCURLY
+      { Decl::Extension(FI($startpos, $endpos), $2, $4, []) }
   ;
 
 decl_list_opt
   : LCURLY decl_list RCURLY
       { Some($2) }
+  | LCURLY RCURLY
+      { Some([]) }
   | 
       { None }
   ;
