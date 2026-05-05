@@ -314,6 +314,8 @@ postfix_expr
       { Expr::Access(FI($startpos, $endpos), $1, $3) }
   | postfix_expr LT type_list GT
       { Expr::GenericInst(FI($startpos, $endpos), $1, $3) }
+  | postfix_expr AS type
+      { Expr::As(FI($startpos, $endpos), $1, $3) }
   ;
 
 atom_expr
@@ -364,6 +366,8 @@ atomic_type
       { Type::Unit }
   | USELF
       { Type::Self }
+  | ANY UCID
+      { Type::AnyProtocol($2) }
   | LPAREN type RPAREN
       { $2 }
   ;

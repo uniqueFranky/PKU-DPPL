@@ -5,6 +5,7 @@ pub(all) enum ResolvedType {
   Unit
   StructType(String)
   ProtocolType(String)
+  ExistentialProtocol(String)
   TypeVariable(String)
   AbstractSelfType(String)
   Function(Array[ResolvedTypeParam], Array[ResolvedParamSig], ResolvedType)
@@ -36,6 +37,7 @@ pub(all) enum ResolvedExpr {
   Call(ResolvedExpr, Array[ResolvedArgExpr])
   Construct(String, Array[ResolvedArgExpr])
   GenericInst(ResolvedExpr, Array[ResolvedType])
+  As(ResolvedExpr, ResolvedType)
   Access(ResolvedExpr, String)
   IfElse(ResolvedExpr, Array[ResolvedStmt], Array[ResolvedStmt])
   If(ResolvedExpr, Array[ResolvedStmt])

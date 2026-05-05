@@ -5,6 +5,7 @@ pub enum Type {
   Unit
   Self
   UDT(String)
+  AnyProtocol(String)
   Function(Array[TypeParam], Array[ParamSig], Type) 
 } derive(Show, Hash, Eq)
 
@@ -39,6 +40,7 @@ pub enum Expr {
   Call(Info, Expr, Array[ArgExpr])
   Construct(Info, String, Array[ArgExpr])
   GenericInst(Info, Expr, Array[Type]) 
+  As(Info, Expr, Type)
   Access(Info, Expr, String)
   IfElse(Info, Expr, StmtList, StmtList)
   If(Info, Expr, StmtList)

@@ -199,6 +199,12 @@ fn resolve_type(
       } else {
         fail("undefined type \"\{name}\"")
       }
+    @syntax.AnyProtocol(name) =>
+      if contains(protocol_names, name) {
+        ResolvedType::ExistentialProtocol(name)
+      } else {
+        fail("undefined protocol \"\{name}\"")
+      }
     @syntax.Function(tparams, params, ret) => {
       let (resolved_tparams, scoped_vars) = resolve_type_params(
         tparams,
@@ -285,6 +291,11 @@ fn resolve_expr(
         tys.map(fn(ty) {
           resolve_type(ty, struct_names, protocol_names, owner, type_vars, false)
         }),
+      )
+    @syntax.As(_, e, ty) =>
+      ResolvedExpr::As(
+        resolve_expr(e, struct_names, protocol_names, owner, type_vars),
+        resolve_type(ty, struct_names, protocol_names, owner, type_vars, false),
       )
     @syntax.Access(_, base, name) =>
       ResolvedExpr::Access(resolve_expr(base, struct_names, protocol_names, owner, type_vars), name)

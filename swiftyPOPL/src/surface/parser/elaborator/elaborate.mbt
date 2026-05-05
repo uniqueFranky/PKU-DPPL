@@ -95,6 +95,7 @@ fn type_of_expr(expr : @checker.TypedExpr) -> @resolver.ResolvedType {
     @checker.Call(_, _, _, ty) => ty
     @checker.Construct(_, _, ty) => ty
     @checker.GenericInst(_, _, ty) => ty
+    @checker.As(_, _, ty) => ty
     @checker.Access(_, _, _, ty) => ty
     @checker.IfElse(_, _, _, ty) => ty
     @checker.If(_, _, ty) => ty
@@ -315,6 +316,7 @@ fn type_to_core(env : ElabEnv, ty : @resolver.ResolvedType) -> String raise {
         }
       }
     @resolver.ProtocolType(name) => fail("protocol type \{name} cannot be used directly in core")
+    @resolver.ExistentialProtocol(name) => existential_type(env, name)
     @resolver.TypeVariable(name) => name
     @resolver.AbstractSelfType(name) => name
     @resolver.Function(tparams, params, ret) => {
@@ -326,6 +328,11 @@ fn type_to_core(env : ElabEnv, ty : @resolver.ResolvedType) -> String raise {
       wrap_foralls(tparams, base)
     }
   }
+}
+
+fn existential_type(env : ElabEnv, protocol_name : String) -> String raise {
+  let self_ty = @resolver.ResolvedType::TypeVariable("X")
+  "{Some X, {value:X, dict:\{dict_type(env, protocol_name, self_ty)}}}"
 }
 
 fn arrow_type(
@@ -548,10 +555,14 @@ fn expr_to_core(env : ElabEnv, expr : @checker.TypedExpr) -> String raise {
       "\{paren(expr_to_core(env, base))}.\{field}"
     @checker.Access(base, mname, @checker.Method(owner, _), _) =>
       method_access_to_core(env, base, owner, mname)
+    @checker.Access(base, mname, @checker.ExistentialMethod(pname, _), _) =>
+      existential_method_call_to_core(env, base, pname, mname, [])
     @checker.GenericInst(base, tys, _) => {
       let (base_s, receiver_arg) = match base {
         @checker.Access(recv, mname, @checker.Method(owner, _), _) =>
           (method_function_to_core(env, owner, mname), Some(expr_to_core(env, recv)))
+        @checker.Access(_, _, @checker.ExistentialMethod(_, _), _) =>
+          fail("generic existential method instantiation is not supported")
         _ => (expr_to_core(env, base), None)
       }
       let applied_types = loop (tys, base_s) {
@@ -571,11 +582,21 @@ fn expr_to_core(env : ElabEnv, expr : @checker.TypedExpr) -> String raise {
           match receiver_arg {
             None => applied_types
             Some(recv) => apply_args(applied_types, [recv])
-          }
+        }
       }
     }
+    @checker.As(base, @resolver.ExistentialProtocol(pname), _) => {
+      let base_ty = type_of_expr(base)
+      let ty_s = type_to_core(env, base_ty)
+      let value_s = expr_to_core(env, base)
+      let dict_s = evidence_for(env, base_ty, pname)
+      "{*\{ty_s}, {value=\{value_s}, dict=\{dict_s}}} as \{existential_type(env, pname)}"
+    }
+    @checker.As(_, _, _) => fail("only casts to any protocol are supported")
     @checker.Call(callee, args, @checker.MethodCall(owner, mname), _) => {
       match callee {
+        @checker.Access(base, _, @checker.ExistentialMethod(pname, _), _) =>
+          existential_method_call_to_core(env, base, pname, mname, args)
         @checker.Access(base, _, _, _) => {
           let fn_s = method_access_to_core(env, base, owner, mname)
           apply_args(fn_s, typed_args_to_core(env, args))
@@ -597,6 +618,20 @@ fn expr_to_core(env : ElabEnv, expr : @checker.TypedExpr) -> String raise {
       "if \{expr_to_core(env, cond)} then \{stmts_to_expr(env, tbranch)} else unit"
     @checker.Function(tps, params, _, body, _) => function_to_core(env, tps, params, body)
   }
+}
+
+fn existential_method_call_to_core(
+  env : ElabEnv,
+  base : @checker.TypedExpr,
+  protocol_name : String,
+  method_name : String,
+  args : Array[@checker.TypedArgExpr],
+) -> String raise {
+  let base_s = expr_to_core(env, base)
+  let method_s = "opened_\{protocol_name}.dict.\{method_name}"
+  let receiver_s = "opened_\{protocol_name}.value"
+  let call_s = apply_args(apply_args(method_s, [receiver_s]), typed_args_to_core(env, args))
+  "let {X, opened_\{protocol_name}} = \{base_s} in \{call_s}"
 }
 
 fn generic_evidence_args(

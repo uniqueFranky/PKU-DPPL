@@ -22,6 +22,7 @@ fn get_expr_type(expr : TypedExpr) -> @resolver.ResolvedType {
     Call(_, _, _, ty) => ty
     Construct(_, _, ty) => ty
     GenericInst(_, _, ty) => ty
+    As(_, _, ty) => ty
     Access(_, _, _, ty) => ty
     IfElse(_, _, _, ty) => ty
     If(_, _, ty) => ty
@@ -165,6 +166,7 @@ fn type_eq(a : @resolver.ResolvedType, b : @resolver.ResolvedType) -> Bool {
     (@resolver.ResolvedType::Unit, @resolver.ResolvedType::Unit) => true
     (@resolver.ResolvedType::StructType(x), @resolver.ResolvedType::StructType(y)) => x == y
     (@resolver.ResolvedType::ProtocolType(x), @resolver.ResolvedType::ProtocolType(y)) => x == y
+    (@resolver.ResolvedType::ExistentialProtocol(x), @resolver.ResolvedType::ExistentialProtocol(y)) => x == y
     (@resolver.ResolvedType::TypeVariable(x), @resolver.ResolvedType::TypeVariable(y)) => x == y
     (@resolver.ResolvedType::AbstractSelfType(x), @resolver.ResolvedType::AbstractSelfType(y)) => x == y
     (@resolver.ResolvedType::Function(tps1, ps1, r1), @resolver.ResolvedType::Function(tps2, ps2, r2)) =>
@@ -191,7 +193,42 @@ fn substitute(ty : @resolver.ResolvedType, mapping : Array[(String, @resolver.Re
         }),
         substitute(ret, mapping),
       )
+    @resolver.ResolvedType::ExistentialProtocol(_) => ty
     _ => ty
+  }
+}
+
+fn mentions_abstract_self(ty : @resolver.ResolvedType, protocol_name : String) -> Bool {
+  match ty {
+    @resolver.ResolvedType::AbstractSelfType(p) => p == protocol_name
+    @resolver.ResolvedType::Function(_, params, ret) =>
+      params.any(fn(p) {
+        match p {
+          @resolver.ParamSig(_, pty) => mentions_abstract_self(pty, protocol_name)
+        }
+      }) || mentions_abstract_self(ret, protocol_name)
+    _ => false
+  }
+}
+
+fn ensure_existential_safe_method(
+  protocol_name : String,
+  method_name : String,
+  method_ty : @resolver.ResolvedType,
+) -> Unit raise {
+  match method_ty {
+    @resolver.ResolvedType::Function(_, params, ret) => {
+      let visible_params = drop_first_param(params)
+      let bad_param = visible_params.any(fn(p) {
+        match p {
+          @resolver.ParamSig(_, pty) => mentions_abstract_self(pty, protocol_name)
+        }
+      })
+      if bad_param || mentions_abstract_self(ret, protocol_name) {
+        fail("existential method \"\{method_name}\" mentions Self in its visible signature")
+      }
+    }
+    _ => ()
   }
 }
 
@@ -566,6 +603,18 @@ fn resolve_member(
         }
       }
     }
+    @resolver.ExistentialProtocol(pname) =>
+      match lookup_protocol(env, pname) {
+        None => None
+        Some(pinfo) =>
+          match lookup_method(pinfo.methods, name) {
+            None => None
+            Some(mt) => {
+              ensure_existential_safe_method(pname, name, mt)
+              Some((mt, MemberResolution::ExistentialMethod(pname, name)))
+            }
+          }
+      }
     _ => None
   }
 }
@@ -622,6 +671,18 @@ fn check_expr(env : Env, expr : @resolver.ResolvedExpr) -> TypedExpr raise {
         _ => fail("generic instantiation target must be a function")
       }
     }
+    @resolver.As(base, target_ty) => {
+      let tb = check_expr(env, base)
+      match target_ty {
+        @resolver.ExistentialProtocol(pname) =>
+          if satisfies(env, get_expr_type(tb), @resolver.ResolvedType::ProtocolType(pname)) {
+            TypedExpr::As(tb, target_ty, target_ty)
+          } else {
+            fail("expression does not satisfy protocol \"\{pname}\"")
+          }
+        _ => fail("only casts to any protocol are supported")
+      }
+    }
     @resolver.Call(callee, args) => {
       let tc = check_expr(env, callee)
       match get_expr_type(tc) {
@@ -632,6 +693,8 @@ fn check_expr(env : Env, expr : @resolver.ResolvedExpr) -> TypedExpr raise {
             let typed_args = match_args(env, args, params)
             let cres = match tc {
               Access(_, _, MemberResolution::Method(owner, mname), _) =>
+                CallResolution::MethodCall(owner, mname)
+              Access(_, _, MemberResolution::ExistentialMethod(owner, mname), _) =>
                 CallResolution::MethodCall(owner, mname)
               Ident(name, _, _) => CallResolution::FunctionCall(name)
               _ => CallResolution::FunctionValueCall
@@ -657,7 +720,7 @@ fn check_expr(env : Env, expr : @resolver.ResolvedExpr) -> TypedExpr raise {
         Some((mty, mres)) =>
           match mres {
             MemberResolution::Field(_, _) => TypedExpr::Access(tb, field_name, mres, mty)
-            MemberResolution::Method(_, _) =>
+            MemberResolution::Method(_, _) | MemberResolution::ExistentialMethod(_, _) =>
               match mty {
                 @resolver.Function(tps, ps, ret) =>
                   if ps.length() == 0 {

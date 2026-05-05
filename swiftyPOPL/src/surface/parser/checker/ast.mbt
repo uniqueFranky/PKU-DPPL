@@ -14,6 +14,7 @@ pub enum CallResolution {
 pub enum MemberResolution {
   Field(String, String)
   Method(String, String)
+  ExistentialMethod(String, String)
 } derive(Show)
 
 pub enum TypedArgExpr {
@@ -30,6 +31,7 @@ pub enum TypedExpr {
   Call(TypedExpr, Array[TypedArgExpr], CallResolution, @resolver.ResolvedType)
   Construct(String, Array[TypedArgExpr], @resolver.ResolvedType)
   GenericInst(TypedExpr, Array[@resolver.ResolvedType], @resolver.ResolvedType)
+  As(TypedExpr, @resolver.ResolvedType, @resolver.ResolvedType)
   Access(TypedExpr, String, MemberResolution, @resolver.ResolvedType)
   IfElse(TypedExpr, Array[TypedStmt], Array[TypedStmt], @resolver.ResolvedType)
   If(TypedExpr, Array[TypedStmt], @resolver.ResolvedType)
