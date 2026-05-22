@@ -1,0 +1,687 @@
+\documentclass[manuscript]{acmart}
+
+\AtBeginDocument{%
+  \providecommand\BibTeX{{%
+    Bib\TeX}}}
+
+\setcopyright{none}
+
+\usepackage{array}
+\usepackage{mathtools}
+\usepackage{stmaryrd}
+\usepackage{mathpartir}
+\usepackage{listings}
+\usepackage{xcolor}
+
+\lstset{
+  basicstyle=\ttfamily\small,
+  breaklines=true,
+  columns=fullflexible,
+  keepspaces=true,
+  frame=single,
+  showstringspaces=false
+}
+
+\begin{document}
+
+\title{Implementing Y\_T with Recursive Types}
+
+\author{Runbang Yan}
+\email{rbyan25@stu.pku.edu.cn}
+\affiliation{%
+  \institution{School of Computer Science, Peking University}
+  \city{Beijing}
+  \country{China}
+}
+
+\renewcommand{\shortauthors}{Yan}
+
+\maketitle
+
+\section{Direct Implementation of Y\_T}
+
+The recursive type used on Slide 23 is:
+
+\begin{lstlisting}
+DivT = mu X. X -> T
+\end{lstlisting}
+
+Thus, after unfolding, a value of type \texttt{DivT} behaves like a function from \texttt{DivT} to \texttt{T}.
+
+In MoonBit, this recursive type can be encoded using an enum:
+
+\begin{lstlisting}
+enum DivT[T] {
+  MkDivT((DivT[T]) -> T)
+}
+\end{lstlisting}
+
+The constructor \texttt{MkDivT} corresponds to the explicit \texttt{fold} operation.
+
+\begin{lstlisting}
+fn[T] fold_t(g : (DivT[T]) -> T) -> DivT[T] {
+  MkDivT(g)
+}
+\end{lstlisting}
+
+The \texttt{unfold} operation is implemented by pattern matching:
+
+\begin{lstlisting}
+fn[T] unfold_t(x : DivT[T]) -> (DivT[T]) -> T {
+  match x {
+    MkDivT(g) => g
+  }
+}
+\end{lstlisting}
+
+Therefore, the direct implementation of \texttt{Y\_T} is:
+
+\begin{lstlisting}
+fn[T] y_t(f : (T) -> T) -> T {
+  let body = fn(x : DivT[T]) -> T {
+    f(unfold_t(x)(x))
+  }
+
+  body(fold_t(body))
+}
+\end{lstlisting}
+
+This corresponds to the term on Slide 23:
+
+\begin{lstlisting}
+Y_T =
+  lambda f : T -> T.
+    (lambda x : DivT.
+       f ((unfold [DivT] x) x))
+    (fold [DivT]
+       (lambda x : DivT.
+          f ((unfold [DivT] x) x)))
+\end{lstlisting}
+
+The type of the direct implementation is:
+
+\begin{lstlisting}
+y_t : ((T) -> T) -> T
+\end{lstlisting}
+
+The correspondence between the formal term and the MoonBit code is:
+
+\begin{itemize}
+  \item \texttt{DivT[T]} corresponds to \texttt{DivT}.
+  \item \texttt{fold\_t} corresponds to \texttt{fold [DivT]}.
+  \item \texttt{unfold\_t} corresponds to \texttt{unfold [DivT]}.
+  \item \texttt{body} corresponds to the function:
+\end{itemize}
+
+\begin{lstlisting}
+lambda x : DivT.
+  f ((unfold [DivT] x) x)
+\end{lstlisting}
+
+\section{Whether the Direct Implementation Works}
+
+The direct implementation is well-typed.
+
+Inside \texttt{body}, the key expression is:
+
+\begin{lstlisting}
+f(unfold_t(x)(x))
+\end{lstlisting}
+
+If \texttt{x} has type \texttt{DivT}, then:
+
+\begin{lstlisting}
+unfold_t(x) : DivT -> T
+\end{lstlisting}
+
+Therefore:
+
+\begin{lstlisting}
+unfold_t(x)(x) : T
+\end{lstlisting}
+
+Since \texttt{f} has type:
+
+\begin{lstlisting}
+f : T -> T
+\end{lstlisting}
+
+we get:
+
+\begin{lstlisting}
+f(unfold_t(x)(x)) : T
+\end{lstlisting}
+
+So:
+
+\begin{lstlisting}
+body : DivT -> T
+\end{lstlisting}
+
+Then:
+
+\begin{lstlisting}
+fold_t(body) : DivT
+\end{lstlisting}
+
+Finally:
+
+\begin{lstlisting}
+body(fold_t(body)) : T
+\end{lstlisting}
+
+Thus the whole function has type:
+
+\begin{lstlisting}
+y_t : ((T) -> T) -> T
+\end{lstlisting}
+
+However, this direct implementation does not work as a practical fixed-point operator in MoonBit.
+
+MoonBit is a strict, call-by-value language. Therefore, before calling a function, MoonBit evaluates its argument first.
+
+The problematic expression is:
+
+\begin{lstlisting}
+f(unfold_t(x)(x))
+\end{lstlisting}
+
+Before calling \texttt{f}, MoonBit first evaluates:
+
+\begin{lstlisting}
+unfold_t(x)(x)
+\end{lstlisting}
+
+Suppose:
+
+\begin{lstlisting}
+x = fold_t(body)
+\end{lstlisting}
+
+Then:
+
+\begin{lstlisting}
+unfold_t(x) = body
+\end{lstlisting}
+
+So:
+
+\begin{lstlisting}
+unfold_t(x)(x) = body(x)
+\end{lstlisting}
+
+But by the definition of \texttt{body}:
+
+\begin{lstlisting}
+body(x) = f(unfold_t(x)(x))
+\end{lstlisting}
+
+Therefore, evaluating \texttt{unfold\_t(x)(x)} requires evaluating \texttt{unfold\_t(x)(x)} again. This causes infinite recursion.
+
+For example, the following program diverges:
+
+\begin{lstlisting}
+fn main {
+  let result = y_t(fn(_ : Int) -> Int {
+    42
+  })
+
+  println(result)
+}
+\end{lstlisting}
+
+Although the function ignores its argument and returns \texttt{42}, MoonBit still evaluates the argument before entering the function body. The argument is the infinitely unfolding self-application.
+
+Therefore, the direct \texttt{Y\_T} is typable, but it does not work operationally as a useful fixed-point operator in MoonBit.
+
+\section{Making It Work}
+
+To make the fixed-point operator work in a strict language, the recursive self-application must be delayed.
+
+Instead of defining a fixed point for an arbitrary type \texttt{T}, we define a fixed point for function types.
+
+The useful type is:
+
+\begin{lstlisting}
+Y : ((A -> B) -> A -> B) -> A -> B
+\end{lstlisting}
+
+That is, given a function transformer:
+
+\begin{lstlisting}
+(A -> B) -> A -> B
+\end{lstlisting}
+
+we produce a recursive function:
+
+\begin{lstlisting}
+A -> B
+\end{lstlisting}
+
+The recursive type for the working version is:
+
+\begin{lstlisting}
+DivAB = mu X. X -> A -> B
+\end{lstlisting}
+
+In MoonBit, this can be encoded as:
+
+\begin{lstlisting}
+enum DivAB[A, B] {
+  MkDivAB((DivAB[A, B]) -> (A) -> B)
+}
+\end{lstlisting}
+
+The explicit \texttt{fold} operation is:
+
+\begin{lstlisting}
+fn[A, B] fold_ab(g : (DivAB[A, B]) -> (A) -> B) -> DivAB[A, B] {
+  MkDivAB(g)
+}
+\end{lstlisting}
+
+The explicit \texttt{unfold} operation is:
+
+\begin{lstlisting}
+fn[A, B] unfold_ab(x : DivAB[A, B]) -> (DivAB[A, B]) -> (A) -> B {
+  match x {
+    MkDivAB(g) => g
+  }
+}
+\end{lstlisting}
+
+The working fixed-point operator is:
+
+\begin{lstlisting}
+fn[A, B] y(f : ((A) -> B) -> (A) -> B) -> (A) -> B {
+  let body = fn(x : DivAB[A, B]) -> (A) -> B {
+    f(fn(a : A) -> B {
+      unfold_ab(x)(x)(a)
+    })
+  }
+
+  body(fold_ab(body))
+}
+\end{lstlisting}
+
+The important part is the additional function abstraction:
+
+\begin{lstlisting}
+fn(a : A) -> B {
+  unfold_ab(x)(x)(a)
+}
+\end{lstlisting}
+
+This lambda delays the recursive call.
+
+In the direct version, the self-application is evaluated immediately:
+
+\begin{lstlisting}
+unfold_t(x)(x)
+\end{lstlisting}
+
+In the working version, the self-application is placed under a function:
+
+\begin{lstlisting}
+fn(a : A) -> B {
+  unfold_ab(x)(x)(a)
+}
+\end{lstlisting}
+
+Therefore, recursive unfolding only happens when the resulting function is applied to an actual argument.
+
+\section{Complete MoonBit Implementation}
+
+\begin{lstlisting}
+enum DivAB[A, B] {
+  MkDivAB((DivAB[A, B]) -> (A) -> B)
+}
+
+fn[A, B] fold_ab(g : (DivAB[A, B]) -> (A) -> B) -> DivAB[A, B] {
+  MkDivAB(g)
+}
+
+fn[A, B] unfold_ab(x : DivAB[A, B]) -> (DivAB[A, B]) -> (A) -> B {
+  match x {
+    MkDivAB(g) => g
+  }
+}
+
+fn[A, B] y(f : ((A) -> B) -> (A) -> B) -> (A) -> B {
+  let body = fn(x : DivAB[A, B]) -> (A) -> B {
+    f(fn(a : A) -> B {
+      unfold_ab(x)(x)(a)
+    })
+  }
+
+  body(fold_ab(body))
+}
+\end{lstlisting}
+
+\section{Three Recursive Functions Defined Using the Fixed-Point Operator}
+
+\subsection{Factorial}
+
+\begin{lstlisting}
+let fact : (Int) -> Int =
+  y(fn(self : (Int) -> Int) -> (Int) -> Int {
+    fn(n : Int) -> Int {
+      if n <= 1 {
+        1
+      } else {
+        n * self(n - 1)
+      }
+    }
+  })
+\end{lstlisting}
+
+Example call:
+
+\begin{lstlisting}
+println("fact(5) = \{fact(5)}")
+\end{lstlisting}
+
+Expected result:
+
+\begin{lstlisting}
+fact(5) = 120
+\end{lstlisting}
+
+\subsection{Fibonacci}
+
+\begin{lstlisting}
+let fib : (Int) -> Int =
+  y(fn(self : (Int) -> Int) -> (Int) -> Int {
+    fn(n : Int) -> Int {
+      if n <= 1 {
+        n
+      } else {
+        self(n - 1) + self(n - 2)
+      }
+    }
+  })
+\end{lstlisting}
+
+Example call:
+
+\begin{lstlisting}
+println("fib(10) = \{fib(10)}")
+\end{lstlisting}
+
+Expected result:
+
+\begin{lstlisting}
+fib(10) = 55
+\end{lstlisting}
+
+\subsection{Summation}
+
+\begin{lstlisting}
+let sum_to : (Int) -> Int =
+  y(fn(self : (Int) -> Int) -> (Int) -> Int {
+    fn(n : Int) -> Int {
+      if n <= 0 {
+        0
+      } else {
+        n + self(n - 1)
+      }
+    }
+  })
+\end{lstlisting}
+
+Example call:
+
+\begin{lstlisting}
+println("sum_to(100) = \{sum_to(100)}")
+\end{lstlisting}
+
+Expected result:
+
+\begin{lstlisting}
+sum_to(100) = 5050
+\end{lstlisting}
+
+\section{Full MoonBit Program}
+
+\begin{lstlisting}
+enum DivAB[A, B] {
+  MkDivAB((DivAB[A, B]) -> (A) -> B)
+}
+
+fn[A, B] fold_ab(g : (DivAB[A, B]) -> (A) -> B) -> DivAB[A, B] {
+  MkDivAB(g)
+}
+
+fn[A, B] unfold_ab(x : DivAB[A, B]) -> (DivAB[A, B]) -> (A) -> B {
+  match x {
+    MkDivAB(g) => g
+  }
+}
+
+fn[A, B] y(f : ((A) -> B) -> (A) -> B) -> (A) -> B {
+  let body = fn(x : DivAB[A, B]) -> (A) -> B {
+    f(fn(a : A) -> B {
+      unfold_ab(x)(x)(a)
+    })
+  }
+
+  body(fold_ab(body))
+}
+
+fn main {
+  let fact : (Int) -> Int =
+    y(fn(self : (Int) -> Int) -> (Int) -> Int {
+      fn(n : Int) -> Int {
+        if n <= 1 {
+          1
+        } else {
+          n * self(n - 1)
+        }
+      }
+    })
+
+  let fib : (Int) -> Int =
+    y(fn(self : (Int) -> Int) -> (Int) -> Int {
+      fn(n : Int) -> Int {
+        if n <= 1 {
+          n
+        } else {
+          self(n - 1) + self(n - 2)
+        }
+      }
+    })
+
+  let sum_to : (Int) -> Int =
+    y(fn(self : (Int) -> Int) -> (Int) -> Int {
+      fn(n : Int) -> Int {
+        if n <= 0 {
+          0
+        } else {
+          n + self(n - 1)
+        }
+      }
+    })
+
+  println("fact(5) = \{fact(5)}")
+  println("fib(10) = \{fib(10)}")
+  println("sum_to(100) = \{sum_to(100)}")
+}
+\end{lstlisting}
+
+Expected output:
+
+\begin{lstlisting}
+fact(5) = 120
+fib(10) = 55
+sum_to(100) = 5050
+\end{lstlisting}
+
+\section{Explicit Formulation with Fold and Unfold}
+
+\subsection{Direct Version}
+
+The recursive type is:
+
+\begin{lstlisting}
+DivT = mu X. X -> T
+\end{lstlisting}
+
+The explicit fold and unfold operations have the following types:
+
+\begin{lstlisting}
+fold [DivT]   : (DivT -> T) -> DivT
+unfold [DivT] : DivT -> DivT -> T
+\end{lstlisting}
+
+The direct version is:
+
+\begin{lstlisting}
+Y_T =
+  lambda f : T -> T.
+    (lambda x : DivT.
+       f ((unfold [DivT] x) x))
+    (fold [DivT]
+       (lambda x : DivT.
+          f ((unfold [DivT] x) x)))
+\end{lstlisting}
+
+Its type is:
+
+\begin{lstlisting}
+Y_T : (T -> T) -> T
+\end{lstlisting}
+
+This version does not work under call-by-value evaluation because the expression:
+
+\begin{lstlisting}
+(unfold [DivT] x) x
+\end{lstlisting}
+
+must be evaluated before \texttt{f} is called. This causes infinite unfolding.
+
+\subsection{Working Delayed Version}
+
+The recursive type for the working version is:
+
+\begin{lstlisting}
+DivAB = mu X. X -> A -> B
+\end{lstlisting}
+
+The explicit fold and unfold operations have the following types:
+
+\begin{lstlisting}
+fold [DivAB]   : (DivAB -> A -> B) -> DivAB
+unfold [DivAB] : DivAB -> DivAB -> A -> B
+\end{lstlisting}
+
+The working version is:
+
+\begin{lstlisting}
+Y =
+  lambda f : (A -> B) -> A -> B.
+    (lambda x : DivAB.
+       f (lambda a : A.
+            ((unfold [DivAB] x) x) a))
+    (fold [DivAB]
+       (lambda x : DivAB.
+          f (lambda a : A.
+               ((unfold [DivAB] x) x) a)))
+\end{lstlisting}
+
+Its type is:
+
+\begin{lstlisting}
+Y : ((A -> B) -> A -> B) -> A -> B
+\end{lstlisting}
+
+The expression:
+
+\begin{lstlisting}
+lambda a : A.
+  ((unfold [DivAB] x) x) a
+\end{lstlisting}
+
+is the delay. It prevents the self-application from being evaluated immediately.
+
+\section{Why the Delayed Version Is a Fixed-Point Operator}
+
+Let:
+
+\begin{lstlisting}
+body =
+  lambda x : DivAB.
+    f (lambda a : A.
+         ((unfold [DivAB] x) x) a)
+\end{lstlisting}
+
+Then:
+
+\begin{lstlisting}
+Y f
+=
+body (fold [DivAB] body)
+\end{lstlisting}
+
+Expanding \texttt{body}:
+
+\begin{lstlisting}
+Y f
+=
+f (lambda a : A.
+     ((unfold [DivAB] (fold [DivAB] body))
+       (fold [DivAB] body)) a)
+\end{lstlisting}
+
+By the iso-recursive type rule:
+
+\begin{lstlisting}
+unfold [DivAB] (fold [DivAB] body)
+=
+body
+\end{lstlisting}
+
+Therefore:
+
+\begin{lstlisting}
+Y f
+=
+f (lambda a : A.
+     (body (fold [DivAB] body)) a)
+\end{lstlisting}
+
+Since:
+
+\begin{lstlisting}
+body (fold [DivAB] body)
+=
+Y f
+\end{lstlisting}
+
+we get:
+
+\begin{lstlisting}
+Y f
+=
+f (lambda a : A. (Y f) a)
+\end{lstlisting}
+
+By eta-equivalence for functions:
+
+\begin{lstlisting}
+lambda a : A. (Y f) a
+=
+Y f
+\end{lstlisting}
+
+Therefore:
+
+\begin{lstlisting}
+Y f = f (Y f)
+\end{lstlisting}
+
+So the delayed version behaves as a fixed-point operator for recursive functions.
+
+\end{document}
+\endinput
+%%
+%% End of file.

@@ -1,0 +1,118 @@
+\documentclass[nonacm]{acmart}
+
+\AtBeginDocument{%
+  \providecommand\BibTeX{{%
+    Bib\TeX}}}
+
+\setcopyright{none}
+
+\usepackage{array}
+\usepackage{mathtools}
+\usepackage{stmaryrd}
+\usepackage{mathpartir}
+\usepackage{listings}
+\usepackage{xcolor}
+
+\lstset{
+  basicstyle=\ttfamily\small,
+  breaklines=true,
+  columns=fullflexible,
+  keepspaces=true,
+  frame=single,
+  showstringspaces=false
+}
+
+\newcommand{\letterm}[3]{\mathbf{let}\ \{#1\}=#2\ \mathbf{in}\ #3}
+\newcommand{\as}{\mathrel{\mathbf{as}}}
+
+\begin{document}
+
+\title{Encodings of Existentials in System F}
+
+\author{Runbang Yan}
+\email{rbyan25@stu.pku.edu.cn}
+\affiliation{%
+  \institution{School of Computer Science, Peking University}
+  \city{Beijing}
+  \country{China}
+}
+
+\renewcommand{\shortauthors}{Yan}
+
+\maketitle
+
+\section{Evaluation of Encoded Existential Elimination}
+
+\textbf{Claim.}
+Under the standard System F encoding of existential types,
+\[
+\{\exists X, T\}
+\triangleq
+\forall S.\,(\forall X.\,T \to S) \to S,
+\]
+we have
+\[
+\letterm{X,x}{(\{*T_{11}, v_{12}\} \as T_1)}{t_2}
+\longrightarrow^{*}
+[X \mapsto T_{11}][x \mapsto v_{12}]t_2.
+\]
+
+\textbf{Proof.}
+Assume that $T_1 = \{\exists X,T_{12}\}$, and suppose that $t_2$ has type $S$ in the context extended with the abstract type variable $X$ and the term variable $x:T_{12}$.
+We also assume the usual side condition for existential elimination, namely that $X$ does not occur free in the result type $S$.
+
+To avoid confusion between the witness type and the answer type of the encoding, we alpha-rename the bound answer type variable in the package encoding to $R$.
+Thus
+\[
+\{*T_{11}, v_{12}\} \as T_1
+\triangleq
+\lambda R.\,\lambda f:(\forall X.\,T_{12}\to R).\,f\,[T_{11}]\,v_{12}.
+\]
+By the encoding of \textsf{let} for existentials,
+\[
+\letterm{X,x}{t_1}{t_2}
+\triangleq
+t_1\,[S]\,(\lambda X.\,\lambda x:T_{12}.\,t_2).
+\]
+Therefore,
+\[
+\begin{aligned}
+&\letterm{X,x}{(\{*T_{11}, v_{12}\} \as T_1)}{t_2}
+\\
+&\quad =
+(\lambda R.\,\lambda f:(\forall X.\,T_{12}\to R).\,f\,[T_{11}]\,v_{12})
+\,[S]\,
+(\lambda X.\,\lambda x:T_{12}.\,t_2)
+\\
+&\quad \longrightarrow
+(\lambda f:(\forall X.\,T_{12}\to S).\,f\,[T_{11}]\,v_{12})
+\,(\lambda X.\,\lambda x:T_{12}.\,t_2)
+\\
+&\quad \longrightarrow
+(\lambda X.\,\lambda x:T_{12}.\,t_2)\,[T_{11}]\,v_{12}
+\\
+&\quad \longrightarrow
+(\lambda x:[X\mapsto T_{11}]T_{12}.\,[X\mapsto T_{11}]t_2)\,v_{12}
+\\
+&\quad \longrightarrow
+[x\mapsto v_{12}]([X\mapsto T_{11}]t_2)
+\\
+&\quad =
+[X\mapsto T_{11}][x\mapsto v_{12}]t_2.
+\end{aligned}
+\]
+The first and third reduction steps are type-level beta-reductions, and the second and fourth reduction steps are ordinary term-level beta-reductions.
+All substitutions are capture-avoiding.
+Hence
+\[
+\letterm{X,x}{(\{*T_{11}, v_{12}\} \as T_1)}{t_2}
+\longrightarrow^{*}
+[X \mapsto T_{11}][x \mapsto v_{12}]t_2.
+\]
+\[
+\Box
+\]
+
+
+
+\end{document}
