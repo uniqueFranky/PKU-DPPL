@@ -28,12 +28,29 @@ pub(all) enum ResolvedFuncSig {
   Sig(String, Array[ResolvedTypeParam], Array[ResolvedParamSig], ResolvedType)
 } derive(Show)
 
+pub(all) enum ResolvedUnaryOp {
+  Not
+} derive(Show)
+
+pub(all) enum ResolvedBinaryOp {
+  Add
+  Sub
+  Less
+  LessEq
+  Greater
+  GreaterEq
+  And
+  Or
+} derive(Show)
+
 pub(all) enum ResolvedExpr {
   IntLit(Int)
   BoolLit(Bool)
   StringLit(String)
   Self
   Ident(String)
+  Unary(ResolvedUnaryOp, ResolvedExpr)
+  Binary(ResolvedBinaryOp, ResolvedExpr, ResolvedExpr)
   Call(ResolvedExpr, Array[ResolvedArgExpr])
   Construct(String, Array[ResolvedArgExpr])
   GenericInst(ResolvedExpr, Array[ResolvedType])

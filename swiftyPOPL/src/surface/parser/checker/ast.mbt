@@ -28,6 +28,8 @@ pub enum TypedExpr {
   StringLit(String, @resolver.ResolvedType)
   Self(@resolver.ResolvedType)
   Ident(String, SymbolBinding, @resolver.ResolvedType)
+  Unary(@resolver.ResolvedUnaryOp, TypedExpr, @resolver.ResolvedType)
+  Binary(@resolver.ResolvedBinaryOp, TypedExpr, TypedExpr, @resolver.ResolvedType)
   Call(TypedExpr, Array[TypedArgExpr], CallResolution, @resolver.ResolvedType)
   Construct(String, Array[TypedArgExpr], @resolver.ResolvedType)
   GenericInst(TypedExpr, Array[@resolver.ResolvedType], @resolver.ResolvedType)

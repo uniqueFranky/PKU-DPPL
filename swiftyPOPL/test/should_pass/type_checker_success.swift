@@ -13,5 +13,5 @@ extension Box: Show {
 
 let b: Box = Box(x: 1)
 let x: Int = b.x
-let y: Int = b.id<Int>(1)
+let y: Int = b.id<Int>(x: 1)
 b.show()

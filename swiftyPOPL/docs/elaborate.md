@@ -62,6 +62,8 @@ pub fn run_string(code : String, fname? : String = "<elaborated>") -> Unit raise
 - `Bool`
 - `String`
 - `Unit`
+- `Int` arithmetic/comparison operators: `+`, `-`, `<`, `>`, `<=`, `>=`
+- Boolean operators: `!`, `&&`, `||`
 - struct type -> core record type
 - struct construction -> core record value
 - field access -> core projection
@@ -82,7 +84,7 @@ pub fn run_string(code : String, fname? : String = "<elaborated>") -> Unit raise
 
 当前暂未支持：
 
-- generic method instantiation on existential package
+- string concatenation, because the current core language has no string concat primitive
 - robust string escaping
 - complete source-level diagnostic mapping after elaboration
 - automatic execution from `src/surface/parser/main.mbt`，该入口目前只打印 typed program 和 core syntax；直接执行请使用根级 `src/interpreter.mbt`
@@ -160,6 +162,41 @@ b.x
 ```text
 (b).x
 ```
+
+## 5.1 基础运算翻译
+
+新增的 surface operators 不扩展 core 语法，而是展开到已有 core 构造。
+
+Bool operators 翻译为 core conditional，因此 `&&` / `||` 保留短路语义：
+
+```text
+!e       -> if E then false else true
+e1 && e2 -> if E1 then E2 else false
+e1 || e2 -> if E1 then true else E2
+```
+
+`Int` 当前仍翻译为 core `Nat`，所以 arithmetic/comparison 通过内联 closed core functions 实现：
+
+```text
+add : Nat -> Nat -> Nat
+sub : Nat -> Nat -> Nat
+lt  : Nat -> Nat -> Bool
+```
+
+对应 operator 翻译为：
+
+```text
+e1 + e2  -> add E1 E2
+e1 - e2  -> sub E1 E2
+e1 < e2  -> lt E1 E2
+e1 > e2  -> lt E2 E1
+e1 <= e2 -> if lt E2 E1 then false else true
+e1 >= e2 -> if lt E1 E2 then false else true
+```
+
+这里 `sub` 是 saturating subtraction，因为 core `pred 0 = 0`。因此 `0 - 1` 的 SwiftyPOPL/core 结果是 `0`，不是 Swift signed `Int` 的 `-1`。
+
+Parser 对 `<` 采用词法消歧：无空格的 `f<T>` 作为泛型实例化，带空格的 `x < y` 作为小于比较。差分测试生成器应生成 `x < y`，不要生成 `x<y`。
 
 ## 6. Method 翻译
 
@@ -251,6 +288,21 @@ b.show()
 ```
 
 这正是 dictionary passing：conformance evidence 由 `dict_Box_Show` 显式传递。
+
+零参数 method value 在 surface 中仍然是 `() -> T`，不是 `Unit -> T`。当前 core 没有真正的零参数函数，因此 elaborator 用 `Unit` thunk 编码：
+
+```swift
+let f: () -> String = b.show
+f()
+```
+
+翻译为：
+
+```text
+f = (lambda __swifty_method_receiver:{x:Nat}.
+       lambda _:Unit. (dict_Box_Show.show) (__swifty_method_receiver)) (b);
+(f) (unit);
+```
 
 ## 8. Constrained Generic 翻译
 
@@ -522,7 +574,6 @@ Elaboration 后 core parser/typechecker 报错的位置来自 generated core str
 
 仍未覆盖：
 
-- existential package 上的泛型方法实例化
 - surface-level 显式 unpack
 - 更复杂的 `Self`、关联类型、opaque type 等 Swift 特性
 
@@ -532,7 +583,7 @@ Elaboration 后 core parser/typechecker 报错的位置来自 generated core str
 
 1. 给 elaborator 增加 should-pass 测试脚本，自动比较 elaborated core 是否能被 core interpreter 接受。
 2. 补充 constrained generic 和 existential method 的正向/反向测试样例，确保 dictionary evidence 与 unpack 路径持续可用。
-3. 为 existential generic method 明确设计取舍：要么实现受限实例化，要么在文档中作为明确的 out-of-scope。
+3. 为 existential generic method 补充更多反向测试，尤其是 `Self` 通过可见签名逃逸的情况。
 4. 把 core 拆成 reusable library package，消除 root interpreter 导入 main package 的 warning。
 5. 为 generated core string 加 pretty mode，方便论文展示和 debug。
 
@@ -541,7 +592,7 @@ Elaboration 后 core parser/typechecker 报错的位置来自 generated core str
 ```text
 1. Stabilize current dictionary-passing and existential elaboration
 2. Add automated tests for should-pass / should-fail examples
-3. Decide and document existential generic method support
+3. Add negative tests for existential generic method safety
 4. Improve diagnostics and source span preservation
 5. Refactor core package split
 ```

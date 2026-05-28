@@ -19,6 +19,8 @@ fn get_expr_type(expr : TypedExpr) -> @resolver.ResolvedType {
     StringLit(_, ty) => ty
     Self(ty) => ty
     Ident(_, _, ty) => ty
+    Unary(_, _, ty) => ty
+    Binary(_, _, _, ty) => ty
     Call(_, _, _, ty) => ty
     Construct(_, _, ty) => ty
     GenericInst(_, _, ty) => ty
@@ -325,6 +327,8 @@ fn subst_protocol_self(
   protocol_name : String,
   struct_name : String,
 ) -> @resolver.ResolvedType {
+  // Protocol requirements keep AbstractSelfType; conformance checks instantiate it
+  // with the concrete struct that claims the conformance.
   match ty {
     @resolver.ResolvedType::AbstractSelfType(p) =>
       if p == protocol_name {
@@ -355,6 +359,8 @@ fn build_env(program : @resolver.ResolvedProgram) -> Env {
   let protocols = []
   let conformance = []
   let ext_methods = []
+  // Collect global declarations before checking bodies, matching the resolver's
+  // top-level pre-collection and allowing references to later declarations.
   let built = loop (program.stmts, structs, protocols, conformance, ext_methods) {
     ([], sacc, pacc, cacc, eacc) => break (sacc, pacc, cacc, eacc)
     ([stmt, ..rest], sacc, pacc, cacc, eacc) =>
@@ -434,6 +440,8 @@ fn check_protocol_conformance(env : Env) -> Unit raise {
       None => fail("undefined protocol in extension")
     }
     for req in pinfo.methods {
+      // Extension methods must implement the protocol requirement after Self has
+      // been specialized to the extended struct.
       match lookup_method(methods, req.0) {
         None => fail("type \"\{sname}\" does not implement protocol \"\{pname}\"")
         Some(sig) =>
@@ -455,6 +463,7 @@ fn match_args(
   args : Array[@resolver.ResolvedArgExpr],
   params : Array[@resolver.ResolvedParamSig],
 ) -> Array[TypedArgExpr] raise {
+  // Label matching is resolved here so later phases see arguments in checked form.
   let mut seen_named = false
   let mut pos_count = 0
   let used_names : Array[String] = []
@@ -568,6 +577,8 @@ fn resolve_member(
           }
       }
     @resolver.TypeVariable(tv) => {
+      // Constrained generic receivers dispatch through the protocol dictionary
+      // for the unique constraint that provides the selected method.
       let constraints = lookup_type_constraints(env, tv)
       let candidates = constraints.filter_map(fn(c) {
         match c {
@@ -610,6 +621,7 @@ fn resolve_member(
           match lookup_method(pinfo.methods, name) {
             None => None
             Some(mt) => {
+              // Opening an existential may not expose the hidden Self type.
               ensure_existential_safe_method(pname, name, mt)
               Some((mt, MemberResolution::ExistentialMethod(pname, name)))
             }
@@ -624,6 +636,44 @@ fn check_expr(env : Env, expr : @resolver.ResolvedExpr) -> TypedExpr raise {
     @resolver.IntLit(i) => TypedExpr::IntLit(i, @resolver.ResolvedType::Int)
     @resolver.BoolLit(b) => TypedExpr::BoolLit(b, @resolver.ResolvedType::Bool)
     @resolver.StringLit(s) => TypedExpr::StringLit(s, @resolver.ResolvedType::String)
+    @resolver.Unary(op, e) => {
+      let te = check_expr(env, e)
+      match op {
+        @resolver.Not =>
+          if type_eq(get_expr_type(te), @resolver.ResolvedType::Bool) {
+            TypedExpr::Unary(op, te, @resolver.ResolvedType::Bool)
+          } else {
+            fail("operator ! expects Bool operand")
+          }
+      }
+    }
+    @resolver.Binary(op, lhs, rhs) => {
+      let tl = check_expr(env, lhs)
+      let tr = check_expr(env, rhs)
+      match op {
+        @resolver.Add | @resolver.Sub =>
+          if type_eq(get_expr_type(tl), @resolver.ResolvedType::Int) &&
+            type_eq(get_expr_type(tr), @resolver.ResolvedType::Int) {
+            TypedExpr::Binary(op, tl, tr, @resolver.ResolvedType::Int)
+          } else {
+            fail("integer arithmetic operators expect Int operands")
+          }
+        @resolver.Less | @resolver.LessEq | @resolver.Greater | @resolver.GreaterEq =>
+          if type_eq(get_expr_type(tl), @resolver.ResolvedType::Int) &&
+            type_eq(get_expr_type(tr), @resolver.ResolvedType::Int) {
+            TypedExpr::Binary(op, tl, tr, @resolver.ResolvedType::Bool)
+          } else {
+            fail("integer comparison operators expect Int operands")
+          }
+        @resolver.And | @resolver.Or =>
+          if type_eq(get_expr_type(tl), @resolver.ResolvedType::Bool) &&
+            type_eq(get_expr_type(tr), @resolver.ResolvedType::Bool) {
+            TypedExpr::Binary(op, tl, tr, @resolver.ResolvedType::Bool)
+          } else {
+            fail("boolean operators expect Bool operands")
+          }
+      }
+    }
     @resolver.Self =>
       match lookup_value(env.locals, env.top_values, "self") {
         Some((_, ty)) => TypedExpr::Self(ty)

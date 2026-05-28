@@ -6,12 +6,14 @@ let pos_lnum : Ref[Int] = Ref::new(1)
 let pos_bol : Ref[Int] = Ref::new(0)
 
 let has_lex_error : Ref[Bool] = Ref::new(false)
+let last_token_end : Ref[Int] = Ref::new(0)
 
 fn reset_lex(fname : String) -> Unit {
   pos_fname.val = fname
   pos_lnum.val = 1
   pos_bol.val = 0
   has_lex_error.val = false
+  last_token_end.val = 0
 }
 
 fn newline(pos : Int) -> Unit {
@@ -70,9 +72,14 @@ rule token() -> (Token, Pos, Pos) {
     "any" as t => { (ANY, newpos($startpos(t)), newpos($endpos(t))) }
     "self" as t => { (SELF, newpos($startpos(t)), newpos($endpos(t))) }
     "Self" as t => { (USELF, newpos($startpos(t)), newpos($endpos(t))) }
+    "_" as t => { (USCORE, newpos($startpos(t)), newpos($endpos(t))) }
     (['a'-'z' '_'] ['A'-'Z' 'a'-'z' '_' '0'-'9' '\'']*) as t => { (LCID(t), newpos($startpos(t)), newpos($endpos(t))) }
     (['A'-'Z'] ['A'-'Z' 'a'-'z' '_' '0'-'9' '\'']*) as t => { (UCID(t), newpos($startpos(t)), newpos($endpos(t))) }
     "->" as t => { (ARROW, newpos($startpos(t)), newpos($endpos(t))) }
+    "&&" as t => { (ANDAND, newpos($startpos(t)), newpos($endpos(t))) }
+    "||" as t => { (OROR, newpos($startpos(t)), newpos($endpos(t))) }
+    "<=" as t => { (LE, newpos($startpos(t)), newpos($endpos(t))) }
+    ">=" as t => { (GE, newpos($startpos(t)), newpos($endpos(t))) }
     ":" as t => { (COLON, newpos($startpos(t)), newpos($endpos(t))) }
     "," as t => { (COMMA, newpos($startpos(t)), newpos($endpos(t))) }
     "." as t => { (DOT, newpos($startpos(t)), newpos($endpos(t))) }
@@ -81,13 +88,18 @@ rule token() -> (Token, Pos, Pos) {
     "{" as t => { (LCURLY, newpos($startpos(t)), newpos($endpos(t))) }
     "(" as t => { (LPAREN, newpos($startpos(t)), newpos($endpos(t))) }
     "[" as t => { (LSQUARE, newpos($startpos(t)), newpos($endpos(t))) }
-    "<" as t => { (LT, newpos($startpos(t)), newpos($endpos(t))) }
+    "<" as t => {
+      let tok = if $startpos(t) == last_token_end.val { GENERIC_LT } else { LT }
+      (tok, newpos($startpos(t)), newpos($endpos(t)))
+    }
     "}" as t => { (RCURLY, newpos($startpos(t)), newpos($endpos(t))) }
     ")" as t => { (RPAREN, newpos($startpos(t)), newpos($endpos(t))) }
     "]" as t => { (RSQUARE, newpos($startpos(t)), newpos($endpos(t))) }
     ";" as t => { (SEMI, newpos($startpos(t)), newpos($endpos(t))) }
     "*" as t => { (STAR, newpos($startpos(t)), newpos($endpos(t))) }
-    "_" as t => { (USCORE, newpos($startpos(t)), newpos($endpos(t))) }
+    "+" as t => { (PLUS, newpos($startpos(t)), newpos($endpos(t))) }
+    "-" as t => { (MINUS, newpos($startpos(t)), newpos($endpos(t))) }
+    "!" as t => { (BANG, newpos($startpos(t)), newpos($endpos(t))) }
     "&" as t => { (AND, newpos($startpos(t)), newpos($endpos(t))) }
     '"' as t => { string_builder.reset(); string_start.val = $startpos(t); string(lexbuf) }
     eof as t => { (EOF, newpos($startpos(t)), newpos($endpos(t))) }
@@ -131,6 +143,8 @@ pub fn init_lex(fname : String) -> Unit {
 }
 
 pub fn Lexer::next_token(self : Lexer) -> (Token, Pos, Pos) {
-  token(self.0)
+  let elem = token(self.0)
+  last_token_end.val = elem.2.cnum
+  elem
 }
 }

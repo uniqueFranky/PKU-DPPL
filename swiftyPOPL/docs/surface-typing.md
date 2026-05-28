@@ -60,6 +60,8 @@ forall X_i : P_i. (label_j : tau_j) -> tau
 表达式覆盖：
 
 - literals
+- integer arithmetic/comparison: `+`, `-`, `<`, `>`, `<=`, `>=`
+- boolean operators: `!`, `&&`, `||`
 - variables
 - `self`
 - function value
@@ -79,6 +81,8 @@ forall X_i : P_i. (label_j : tau_j) -> tau
 - `extension S : P`
 
 注意：当前实现已经有 `any P` 的 parser/resolver/checker/elaborator 基本路径，包括 `e as any P` 打包和受限的 existential method 调用。类型系统仍把 surface 层的 explicit unpack 排除在外，让 elimination 由 elaboration 翻译到 core existential unpack。
+
+当前实现中的 `Int` 仍 elaborates to core `Nat`，所以 `-` 是 saturating subtraction；例如 `0 - 1` 的 core 结果是 `0`，不是 Swift signed `Int` 的 `-1`。字符串拼接没有加入 surface typing，因为 core 当前没有 string concatenation primitive。
 
 ## 4. 环境设计
 
@@ -307,6 +311,8 @@ show : (Self) -> String
 () -> String
 ```
 
+注意：`()` 表示零个 surface 参数，不等同于一个 `Unit` 参数。工程实现 lower 到 core string 时会用 `Unit -> String` 和 `unit` application 模拟零参数函数；这是 core 编码细节，不改变 surface typing。
+
 形式化中通过 `T-ConstrainedMethod` 完成：
 
 ```text
@@ -353,6 +359,31 @@ unpack s as {X, opened} in opened.dict.show(opened.value)
 
 若 method 的返回类型或显式参数类型包含 protocol 中的抽象 `Self`，例如 `func clone() -> Self`，则当前 checker 会拒绝对 `any P` 的该方法调用。这个限制对应 Swift existential 的安全子集：打开 package 后的 witness type 不能逃逸到 surface 可见类型中。
 
+形式化中对应规则为 `T-ExistentialMethod`：
+
+```text
+Psi; Omega; Gamma; rho |- e : any P
+Psi_P(P)(m) = forall Y_i : Q_i. (Self, label_j : tau_j) -> tau_r
+Self notin FV(tau_j)
+Self notin FV(tau_r)
+--------------------------------------------------------
+Psi; Omega; Gamma; rho |- e.m : forall Y_i : Q_i. (label_j : tau_j) -> tau_r
+```
+
+该规则覆盖 existential-safe protocol methods，包括 method-local type parameters。泛型约束在 elaboration 中继续通过显式 dictionary 参数传递。
+
+它的 elaboration/preservation 关键点是：`e : any P` 先翻译成 core existential package，method selection 打开 package 后立即用 dictionary 方法调用隐藏 receiver：
+
+```text
+e.m ~~>
+  unpack E as {X, opened} in opened.dict.m(opened.value)
+
+e.m(args) ~~>
+  unpack E as {X, opened} in opened.dict.m(opened.value, args)
+```
+
+打开 package 后，`opened.value : X`，`opened.dict : Dict[P, X]`。协议方法签名中的 `Self` 被替换为局部 witness type `X`。`Self notin FV(tau_j)` 和 `Self notin FV(tau_r)` 这两个 side condition 保证 unpack body 的结果类型不包含 `X`，因此满足 core existential elimination 的“不让 witness type 逃逸”条件。
+
 ## 10. Statement Sequence Typing
 
 Statement sequence judgment：
@@ -369,9 +400,8 @@ Psi; Omega; Gamma; rho |- ss : tau
 - `let` 只影响后续 statements
 - function declaration 可以将函数名加入后续环境
 
-当前规则允许 recursive function，因为 `S-Fun` 中函数名在函数体内可见。
-
-如果后续决定 surface 不支持递归，只需要从 `S-Fun` 和 `D-Fun` 的函数体检查 premise 中移除 `f : sigma`。
+当前 surface fragment 不支持用户定义函数的递归调用。`S-Fun`/`D-Fun` 检查函数体时不把函数名放入自己的 body environment；函数名只加入后续 statement 的环境。
+Core 仍有 `fix`，但它只用于 elaborator 内部定义 `add/sub/lt` 这样的 closed operator macro。
 
 ## 11. Declaration Well-Formedness
 
@@ -461,6 +491,28 @@ then [[Psi; Omega; Gamma; rho]] |-IR E : [[tau]]
               = forall X. Dict[P, X] -> [[tau]] -> [[tau']]
 ```
 
+当前工程实现直接 lower 到 core concrete syntax，其中 `[[Int]] = Nat`。新增 surface operators 不扩展 core，而是作为 elaboration macro：
+
+```text
+e1 + e2  ~~> add E1 E2
+e1 - e2  ~~> sub E1 E2
+e1 < e2  ~~> lt E1 E2
+e1 > e2  ~~> lt E2 E1
+e1 <= e2 ~~> if lt E2 E1 then false else true
+e1 >= e2 ~~> if lt E1 E2 then false else true
+!e       ~~> if E then false else true
+e1 && e2 ~~> if E1 then E2 else false
+e1 || e2 ~~> if E1 then true else E2
+```
+
+其中 `add/sub/lt` 是用 core `fix`、`succ`、`pred`、`iszero` 定义出的 closed terms。Elaboration preservation 需要额外证明这些宏 well typed：
+
+```text
+add : Nat -> Nat -> Nat
+sub : Nat -> Nat -> Nat
+lt  : Nat -> Nat -> Bool
+```
+
 Method call 的 elaboration：
 
 ```text
@@ -528,6 +580,7 @@ then [[Psi; Omega; Gamma; rho]] |-IR E : [[tau]].
 - `T-StructMethod`：需要证明 method table lookup 翻译成合法 dictionary/record projection
 - `T-ConstrainedMethod`：需要证明 `Omega` 中的 protocol bound 翻译成 IR dictionary parameter
 - `T-AsAny`：需要证明 protocol satisfaction judgment 能产生 package 所需的 dictionary evidence
+- operator rules：需要使用 `add/sub/lt` 的 core well-typedness lemma；boolean operators 直接由 core conditional typing rule 推出
 
 ### 14.3 IR to Core Preservation
 
@@ -590,7 +643,7 @@ well-typed surface program cannot elaborate to a stuck core program
 3. `TypedAST -> IR` elaboration preservation 证明。
 4. `IR -> core.Term` lowering 证明。
 5. 结构化错误和源码位置。
-6. existential generic method 的设计与实现取舍。
+6. existential generic method 的更多反向测试与 proof 细节整理。
 
 ## 16. 后续建议
 

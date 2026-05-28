@@ -29,6 +29,10 @@
 %token<Int> INTV
 %token<String> STRINGV
 %token ARROW        "->"
+%token ANDAND       "&&"
+%token OROR         "||"
+%token LE           "<="
+%token GE           ">="
 %token COLON        ":"
 %token COMMA        ","
 %token DOT          "."
@@ -38,13 +42,23 @@
 %token LPAREN       "("
 %token LSQUARE      "["
 %token LT           "<"
+%token GENERIC_LT
 %token RCURLY       "}"
 %token RPAREN       ")"
 %token RSQUARE      "]"
 %token SEMI         ";"
 %token STAR         "*"
+%token PLUS         "+"
+%token MINUS        "-"
+%token BANG         "!"
 %token USCORE       "_"
 %token AND          "&"
+
+%left "||"
+%left "&&"
+%nonassoc "<" ">" "<=" ">="
+%left "+" "-"
+%right "!"
 
 %type<Program>                        program
 %type<Stmt>                           stmt
@@ -55,6 +69,11 @@
 %type<Option[Expr]>                   init_expr_opt
 
 %type<Expr>                           expr
+%type<Expr>                           or_expr
+%type<Expr>                           and_expr
+%type<Expr>                           comparison_expr
+%type<Expr>                           additive_expr
+%type<Expr>                           unary_expr
 %type<Expr>                           atom_expr
 %type<Expr>                           postfix_expr
 
@@ -75,6 +94,7 @@
 %type<Array[Type]>                    type_constraint_list
 %type<Option[Array[Type]]>            type_constraint_list_opt
 %type<Array[TypeParam]>               generic_params
+%type<Array[TypeParam]>               generic_params_body
 %type<Array[TypeParam]>               generic_params_opt
 
 %type<Array[Type]>                    type_list
@@ -110,7 +130,7 @@ param_decl
   : LCID LCID COLON type
       { ParamDecl::ParamDecl(Some($1), $2, $4) }
   | LCID COLON type
-      { ParamDecl::ParamDecl(None, $1, $3) }
+      { ParamDecl::ParamDecl(Some($1), $1, $3) }
   | USCORE LCID COLON type
       { ParamDecl::ParamDecl(None, $2, $4) }
   ;
@@ -208,8 +228,15 @@ type_param_list
       { [$1] }
   ;
 
+generic_params_body
+  : type_param_list GT
+      { $1 }
+  ;
+
 generic_params
-  : LT type_param_list GT
+  : LT generic_params_body
+      { $2 }
+  | GENERIC_LT generic_params_body
       { $2 }
   ;
 
@@ -299,6 +326,49 @@ expr
       { Expr::IfElse(FI($startpos, $endpos), $2, $4, $8) }
   | FUNC generic_params_opt param_decl_list_opt ARROW type LCURLY stmt_list RCURLY
       { Expr::Function(FI($startpos, $endpos), $2, $3, $5, $7) }
+  | or_expr
+      { $1 }
+  ;
+
+or_expr
+  : or_expr OROR and_expr
+      { Expr::Binary(FI($startpos, $endpos), BinaryOp::Or, $1, $3) }
+  | and_expr
+      { $1 }
+  ;
+
+and_expr
+  : and_expr ANDAND comparison_expr
+      { Expr::Binary(FI($startpos, $endpos), BinaryOp::And, $1, $3) }
+  | comparison_expr
+      { $1 }
+  ;
+
+comparison_expr
+  : additive_expr LT additive_expr
+      { Expr::Binary(FI($startpos, $endpos), BinaryOp::Less, $1, $3) }
+  | additive_expr LE additive_expr
+      { Expr::Binary(FI($startpos, $endpos), BinaryOp::LessEq, $1, $3) }
+  | additive_expr GT additive_expr
+      { Expr::Binary(FI($startpos, $endpos), BinaryOp::Greater, $1, $3) }
+  | additive_expr GE additive_expr
+      { Expr::Binary(FI($startpos, $endpos), BinaryOp::GreaterEq, $1, $3) }
+  | additive_expr
+      { $1 }
+  ;
+
+additive_expr
+  : additive_expr PLUS unary_expr
+      { Expr::Binary(FI($startpos, $endpos), BinaryOp::Add, $1, $3) }
+  | additive_expr MINUS unary_expr
+      { Expr::Binary(FI($startpos, $endpos), BinaryOp::Sub, $1, $3) }
+  | unary_expr
+      { $1 }
+  ;
+
+unary_expr
+  : BANG unary_expr
+      { Expr::Unary(FI($startpos, $endpos), UnaryOp::Not, $2) }
   | postfix_expr
       { $1 }
   ;
@@ -312,7 +382,7 @@ postfix_expr
       { Expr::Call(FI($startpos, $endpos), $1, $2) }
   | postfix_expr DOT LCID
       { Expr::Access(FI($startpos, $endpos), $1, $3) }
-  | postfix_expr LT type_list GT
+  | postfix_expr GENERIC_LT type_list GT
       { Expr::GenericInst(FI($startpos, $endpos), $1, $3) }
   | postfix_expr AS type
       { Expr::As(FI($startpos, $endpos), $1, $3) }
@@ -345,7 +415,9 @@ type_list
   ;
 
 type
-  : atomic_type
+  : LPAREN RPAREN ARROW type
+      { Type::Function([], [], $4) }
+  | atomic_type
       { $1 }
   | atomic_type ARROW type
       { Type::Function([], [ParamSig::ParamSig(None, $1)], $3) }

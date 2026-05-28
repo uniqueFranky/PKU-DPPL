@@ -100,6 +100,7 @@ fn ensure_unique_names(decls : Array[@syntax.Decl], what : String) -> Unit raise
 fn collect_top_types(stmts : Array[@syntax.Stmt]) -> (Array[String], Array[String]) raise {
   let decls = stmt_array_to_decl_array(stmts)
   ensure_unique_names(decls, "top-level")
+  // Pre-collect nominal type names so declarations can refer to types defined later.
   loop (decls, empty_strings(), empty_strings()) {
     ([], structs, protocols) => break (structs, protocols)
     ([decl, ..rest], structs, protocols) =>
@@ -181,6 +182,8 @@ fn resolve_type(
     @syntax.Self =>
       match owner {
         TopLevel => fail("Self is only valid in struct/protocol/extension scopes")
+        // Concrete owner contexts resolve Self immediately; protocol requirements
+        // keep an abstract Self until conformance checking or dictionary rendering.
         StructOwner(name) => ResolvedType::StructType(name)
         ProtocolOwner(name) => ResolvedType::AbstractSelfType(name)
         ExtensionOwner(name) => ResolvedType::StructType(name)
@@ -238,6 +241,25 @@ fn resolve_type(
   }
 }
 
+fn resolve_unary_op(op : @syntax.UnaryOp) -> ResolvedUnaryOp {
+  match op {
+    @syntax.Not => ResolvedUnaryOp::Not
+  }
+}
+
+fn resolve_binary_op(op : @syntax.BinaryOp) -> ResolvedBinaryOp {
+  match op {
+    @syntax.Add => ResolvedBinaryOp::Add
+    @syntax.Sub => ResolvedBinaryOp::Sub
+    @syntax.Less => ResolvedBinaryOp::Less
+    @syntax.LessEq => ResolvedBinaryOp::LessEq
+    @syntax.Greater => ResolvedBinaryOp::Greater
+    @syntax.GreaterEq => ResolvedBinaryOp::GreaterEq
+    @syntax.And => ResolvedBinaryOp::And
+    @syntax.Or => ResolvedBinaryOp::Or
+  }
+}
+
 fn resolve_expr(
   expr : @syntax.Expr,
   struct_names : Array[String],
@@ -251,6 +273,17 @@ fn resolve_expr(
     @syntax.StringLit(_, s) => ResolvedExpr::StringLit(s)
     @syntax.Self(_) => ResolvedExpr::Self
     @syntax.Ident(_, name) => ResolvedExpr::Ident(name)
+    @syntax.Unary(_, op, e) =>
+      ResolvedExpr::Unary(
+        resolve_unary_op(op),
+        resolve_expr(e, struct_names, protocol_names, owner, type_vars),
+      )
+    @syntax.Binary(_, op, lhs, rhs) =>
+      ResolvedExpr::Binary(
+        resolve_binary_op(op),
+        resolve_expr(lhs, struct_names, protocol_names, owner, type_vars),
+        resolve_expr(rhs, struct_names, protocol_names, owner, type_vars),
+      )
     @syntax.Call(_, f, args) =>
       ResolvedExpr::Call(
         resolve_expr(f, struct_names, protocol_names, owner, type_vars),
@@ -453,6 +486,7 @@ fn resolve_decl(
           ResolvedDecl::MethodDef(
             name,
             resolved_tparams,
+            // Methods are represented as ordinary functions with an explicit receiver.
             [ResolvedParamDecl::ParamDecl(None, "self", ResolvedType::StructType(owner_name))]
               .add(resolved_params),
             resolved_ret,

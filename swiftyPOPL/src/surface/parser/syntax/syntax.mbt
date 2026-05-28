@@ -31,12 +31,29 @@ pub enum FuncSig {
   Sig(String, Array[TypeParam], Array[ParamSig], Type)
 } derive(Show, Hash, Eq)
 
+pub enum UnaryOp {
+  Not
+} derive(Show, Hash, Eq)
+
+pub enum BinaryOp {
+  Add
+  Sub
+  Less
+  LessEq
+  Greater
+  GreaterEq
+  And
+  Or
+} derive(Show, Hash, Eq)
+
 pub enum Expr {
   IntLit(Info, Int)
   BoolLit(Info, Bool)
   StringLit(Info, String)
   Self(Info)
   Ident(Info, String)
+  Unary(Info, UnaryOp, Expr)
+  Binary(Info, BinaryOp, Expr, Expr)
   Call(Info, Expr, Array[ArgExpr])
   Construct(Info, String, Array[ArgExpr])
   GenericInst(Info, Expr, Array[Type]) 
