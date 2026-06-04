@@ -1,0 +1,142 @@
+\documentclass[nonacm]{acmart}
+
+\AtBeginDocument{%
+  \providecommand\BibTeX{{%
+    Bib\TeX}}}
+
+\setcopyright{none}
+
+\usepackage{array}
+\usepackage{mathtools}
+\usepackage{stmaryrd}
+\usepackage{mathpartir}
+\usepackage{listings}
+\usepackage{xcolor}
+
+\lstset{
+  basicstyle=\ttfamily\small,
+  breaklines=true,
+  columns=fullflexible,
+  keepspaces=true,
+  frame=single,
+  showstringspaces=false
+}
+
+\newcommand{\FV}{\mathsf{FV}}
+\newcommand{\dom}{\mathsf{dom}}
+\newcommand{\Nat}{\mathsf{Nat}}
+\newcommand{\Bool}{\mathsf{Bool}}
+
+\begin{document}
+
+\title{Constraint Typing for Self-Application}
+
+\author{Runbang Yan}
+\email{rbyan25@stu.pku.edu.cn}
+\affiliation{%
+  \institution{School of Computer Science, Peking University}
+  \city{Beijing}
+  \country{China}
+}
+
+\renewcommand{\shortauthors}{Yan}
+
+\maketitle
+
+\section{Constraint Typing Derivation}
+
+Consider the term
+\[
+  \lambda x:X.\ x\ x .
+\]
+In the body, both occurrences of $x$ have type $X$ under the context
+$x:X$.  Applying rule \textsc{CT-App}, introduce a fresh type variable
+$Y$ for the result of the application.  The application generates the
+constraint that the type of the left occurrence of $x$ must be an arrow
+from the type of the argument occurrence of $x$ to $Y$:
+\[
+  X = X \to Y .
+\]
+Therefore the constraint typing derivation is:
+\[
+\inferrule*[Right=\textsc{CT-Abs}]
+  {
+    \inferrule*[Right=\textsc{CT-App}]
+      {
+        \inferrule*[Right=\textsc{CT-Var}]
+          {x:X \in x:X}
+          {x:X \vdash x : X \mid_{\emptyset} \emptyset}
+        \\
+        \inferrule*[Right=\textsc{CT-Var}]
+          {x:X \in x:X}
+          {x:X \vdash x : X \mid_{\emptyset} \emptyset}
+        \\
+        Y \notin \{X\}
+      }
+      {x:X \vdash x\ x : Y \mid_{\{Y\}} \{X = X \to Y\}}
+  }
+  {
+    \emptyset \vdash \lambda x:X.\ x\ x : X \to Y
+      \mid_{\{Y\}} \{X = X \to Y\}
+  } .
+\]
+
+\section{Unification with Finite Types}
+
+The generated constraint set is
+\[
+  C = \{X = X \to Y\}.
+\]
+It is not unifiable in the ordinary finite type language.  Any unifier
+$\sigma$ would have to satisfy
+\[
+  \sigma(X) = \sigma(X) \to \sigma(Y).
+\]
+Thus $\sigma(X)$ would need to be equal to a proper arrow type containing
+itself on the left.  This cannot be represented by a finite type.
+Equivalently, the standard unification algorithm rejects the equation by
+the occurs check because
+\[
+  X \in \FV(X \to Y).
+\]
+
+\section{Unification with Recursive Types}
+
+If the occurs check is replaced by the recursive-type case from the
+slides, the equation
+\[
+  X = X \to Y
+\]
+matches the branch where $S=X$ and $X \in \FV(T)$, with
+$T = X \to Y$.  Hence the algorithm computes
+\[
+\begin{aligned}
+  \mathsf{unify}(\{X = X \to Y\})
+    &=
+      \mathsf{unify}([X \mapsto \mu X.\,X \to Y]\emptyset)
+      \circ [X \mapsto \mu X.\,X \to Y] \\
+    &=
+      [X \mapsto \mu X.\,X \to Y].
+\end{aligned}
+\]
+Under the usual unfolding equality for recursive types,
+\[
+  \mu X.\,X \to Y \equiv (\mu X.\,X \to Y) \to Y,
+\]
+so this substitution satisfies the original constraint.
+
+Applying this substitution to the type assigned by the constraint
+derivation gives
+\[
+  \sigma(X \to Y)
+  =
+  (\mu X.\,X \to Y) \to Y.
+\]
+Thus, with recursive types, the algorithm accepts the self-application
+and returns the substitution
+\[
+  [X \mapsto \mu X.\,X \to Y],
+\]
+leaving $Y$ unconstrained.
+
+\end{document}

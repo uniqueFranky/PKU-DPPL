@@ -1,0 +1,250 @@
+\documentclass[nonacm]{acmart}
+
+\AtBeginDocument{%
+  \providecommand\BibTeX{{%
+    Bib\TeX}}}
+
+\setcopyright{none}
+
+\usepackage{array}
+\usepackage{mathtools}
+\usepackage{stmaryrd}
+\usepackage{mathpartir}
+\usepackage{listings}
+\usepackage{xcolor}
+
+\lstset{
+  basicstyle=\ttfamily\small,
+  breaklines=true,
+  columns=fullflexible,
+  keepspaces=true,
+  frame=single,
+  showstringspaces=false
+}
+
+\newcommand{\ctx}{\mathrel{\mathsf{ctx}}}
+\newcommand{\FV}{\mathsf{FV}}
+\newcommand{\dom}{\mathsf{dom}}
+
+\begin{document}
+
+\title{Local Type Definitions in System F$_\omega$}
+
+\author{Runbang Yan}
+\email{rbyan25@stu.pku.edu.cn}
+\affiliation{%
+  \institution{School of Computer Science, Peking University}
+  \city{Beijing}
+  \country{China}
+}
+
+\renewcommand{\shortauthors}{Yan}
+
+\maketitle
+
+\section{Extension}
+
+We extend System F$_\omega$ with transparent local type definitions:
+\[
+t ::= \cdots \mid \mathbf{let}\ X = T\ \mathbf{in}\ t
+\qquad
+\Gamma ::= \cdots \mid \Gamma, X :: K = T .
+\]
+The context entry $X :: K = T$ binds $X$ as a local abbreviation for $T$.
+It is not an abstract type variable: inside the scope of the binding, $X$ is definitionally equal to $T$.
+All substitutions below are capture-avoiding.
+
+\section{Context Formation}
+
+The new context formation rule is:
+\[
+\inferrule*[Right=\textsc{C-TDef}]
+  {
+    \Gamma \ctx
+    \\
+    \Gamma \vdash T :: K
+    \\
+    X \notin \dom(\Gamma)
+  }
+  {
+    \Gamma, X :: K = T \ctx
+  }.
+\]
+The premise $\Gamma \vdash T :: K$ prevents recursive type abbreviations such as
+$X :: K = X$.
+Thus local type definitions do not add unrestricted type-level recursion.
+
+\section{Kinding}
+
+A defined type variable can be used with its declared kind:
+\[
+\inferrule*[Right=\textsc{K-TDefVar}]
+  {
+    X :: K = T \in \Gamma
+  }
+  {
+    \Gamma \vdash X :: K
+  }.
+\]
+All existing kinding rules are unchanged.
+For example, if $\Gamma, X :: * = \mathsf{Nat}$ is well formed, then
+\[
+\Gamma, X :: * = \mathsf{Nat} \vdash X :: *.
+\]
+
+\section{Type Equivalence}
+
+The key rule is that a local type definition may be unfolded:
+\[
+\inferrule*[Right=\textsc{Q-TDef}]
+  {
+    X :: K = T \in \Gamma
+  }
+  {
+    \Gamma \vdash X \equiv T :: K
+  }.
+\]
+Together with symmetry and transitivity of type equivalence, this also gives
+$\Gamma \vdash T \equiv X :: K$.
+
+The ordinary congruence rules of System F$_\omega$ remain valid.  In particular:
+\[
+\inferrule*[Right=\textsc{Q-Arrow}]
+  {
+    \Gamma \vdash S_1 \equiv T_1 :: *
+    \\
+    \Gamma \vdash S_2 \equiv T_2 :: *
+  }
+  {
+    \Gamma \vdash S_1 \to S_2 \equiv T_1 \to T_2 :: *
+  }
+\]
+\[
+\inferrule*[Right=\textsc{Q-App}]
+  {
+    \Gamma \vdash S_1 \equiv T_1 :: K_{11} \Rightarrow K_{12}
+    \\
+    \Gamma \vdash S_2 \equiv T_2 :: K_{11}
+  }
+  {
+    \Gamma \vdash S_1\ S_2 \equiv T_1\ T_2 :: K_{12}
+  }
+\]
+\[
+\inferrule*[Right=\textsc{Q-Abs}]
+  {
+    \Gamma, X :: K_1 \vdash S_2 \equiv T_2 :: K_2
+  }
+  {
+    \Gamma \vdash
+    \lambda X :: K_1.\ S_2
+    \equiv
+    \lambda X :: K_1.\ T_2
+    :: K_1 \Rightarrow K_2
+  }.
+\]
+The beta rule for type-level application is unchanged:
+\[
+\inferrule*[Right=\textsc{Q-Beta}]
+  {
+    \Gamma, X :: K_{11} \vdash T_{12} :: K_{12}
+    \\
+    \Gamma \vdash T_2 :: K_{11}
+  }
+  {
+    \Gamma \vdash
+    (\lambda X :: K_{11}.\ T_{12})\ T_2
+    \equiv
+    [X \mapsto T_2]T_{12}
+    :: K_{12}
+  }.
+\]
+
+\section{Typing}
+
+The conversion rule can now use the extended equivalence relation:
+\[
+\inferrule*[Right=\textsc{T-Eq}]
+  {
+    \Gamma \vdash t : S
+    \\
+    \Gamma \vdash S \equiv T :: *
+    \\
+    \Gamma \vdash T :: *
+  }
+  {
+    \Gamma \vdash t : T
+  }.
+\]
+
+The typing rule for a local type definition is:
+\[
+\inferrule*[Right=\textsc{T-TLet}]
+  {
+    \Gamma \vdash T :: K
+    \\
+    \Gamma, X :: K = T \vdash t : S
+  }
+  {
+    \Gamma \vdash
+    \mathbf{let}\ X = T\ \mathbf{in}\ t
+    :
+    [X \mapsto T]S
+  }.
+\]
+The result type substitutes away the local name $X$, so $X$ cannot escape its scope.
+The usual well-formedness and type-substitution lemmas justify that
+$\Gamma \vdash [X \mapsto T]S :: *$.
+
+\section{Evaluation}
+
+Since local type definitions are transparent compile-time abbreviations, evaluation simply substitutes the definition into the body:
+\[
+\inferrule*[Right=\textsc{E-TLet}]
+  { }
+  {
+    \mathbf{let}\ X = T\ \mathbf{in}\ t
+    \longrightarrow
+    [X \mapsto T]t
+  }.
+\]
+The substitution acts on type annotations, type applications, package annotations, and all other type occurrences inside the term.
+
+For the example from the slides:
+\[
+\begin{aligned}
+&\mathbf{let}\ X = \mathsf{Nat}\ \mathbf{in}\ 
+  (\lambda x:X.\ \mathsf{succ}\ x)\ \mathsf{zero}
+\\
+&\qquad\longrightarrow
+  (\lambda x:\mathsf{Nat}.\ \mathsf{succ}\ x)\ \mathsf{zero}
+\\
+&\qquad\longrightarrow
+  \mathsf{succ}\ \mathsf{zero}.
+\end{aligned}
+\]
+
+\section{Preservation Check}
+
+The new evaluation rule preserves types.
+Suppose
+\[
+\Gamma \vdash \mathbf{let}\ X = T\ \mathbf{in}\ t : [X \mapsto T]S.
+\]
+By inversion of \textsc{T-TLet},
+\[
+\Gamma \vdash T :: K
+\qquad\text{and}\qquad
+\Gamma, X :: K = T \vdash t : S.
+\]
+By the type-definition substitution lemma,
+\[
+\Gamma \vdash [X \mapsto T]t : [X \mapsto T]S.
+\]
+This is exactly the type of the reduct given by \textsc{E-TLet}.
+
+Progress is also unchanged: a term of the form
+$\mathbf{let}\ X = T\ \mathbf{in}\ t$ is not a value and can always take the
+\textsc{E-TLet} step.
+
+\end{document}
