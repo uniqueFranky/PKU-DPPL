@@ -28,6 +28,8 @@
 \newcommand{\subst}[3]{[#2\mapsto #1]#3}
 \newcommand{\ftype}[3]{\forall #1.\ (#2) \to #3}
 \newcommand{\emptyctx}{\cdot}
+\newcommand{\sctx}{\Psi;\Omega;\Gamma;\rho}
+\newcommand{\ectx}{\Psi;\Omega;\Gamma;\rho;\Delta}
 \newcommand{\has}{\vdash}
 \newcommand{\modelsP}{\mathrel{\triangleright}}
 \newcommand{\elab}{\leadsto}
@@ -632,12 +634,13 @@ The boolean connectives preserve short-circuiting because the second operand app
 
 Most expression rules are homomorphic.
 The essential non-homomorphic rules are generic application, method lookup, existential packaging, and existential-safe method selection.
+The omitted homomorphic rules translate literals, variables, calls, field access, construction, conditionals, and primitive operators structurally to the corresponding core form described above.
+They do not create new type abstractions, dictionaries, or existential packages.
 
 \begin{mathpar}
 \inferrule*[Right=\textsc{E-TypeApp}]
   {
-    \Psi;\Omega;\Gamma;\rho;\Delta
-      \has e:
+    \ectx \has e:
       \ftype{\overline{X_i:\overline{P_i}}}
              {\overline{\ell_j:\tau_j}}
              {\tau_r}
@@ -647,8 +650,7 @@ The essential non-homomorphic rules are generic application, method lookup, exis
       \quad\text{for every }P\in\overline{P_i}}
   }
   {
-    \Psi;\Omega;\Gamma;\rho;\Delta
-      \has e\langle\overline{\tau_i'}\rangle:
+    \ectx \has e\langle\overline{\tau_i'}\rangle:
       \subst{\overline{\tau_i'}}{\overline{X_i}}
       \left(
         \ftype{\emptyctx}{\overline{\ell_j:\tau_j}}{\tau_r}
@@ -659,32 +661,23 @@ The essential non-homomorphic rules are generic application, method lookup, exis
 
 \inferrule*[Right=\textsc{E-StructMethod}]
   {
-    \Psi;\Omega;\Gamma;\rho;\Delta \has e:S \elab t \\
+    \ectx \has e:S \elab t \\
     \Psi_M(S)(m)=
       \ftype{\overline{X_i:\overline{P_i}}}
              {\epsilon:S,\overline{\ell_j:\tau_j}}
              {\tau_r}
   }
   {
-    \Psi;\Omega;\Gamma;\rho;\Delta
-      \has e.m:
+    \ectx \has e.m:
       \ftype{\overline{X_i:\overline{P_i}}}
              {\overline{\ell_j:\tau_j}}
              {\tau_r}
-      \elab
-      \Lambda \overline{X_i}.\
-      \lambda \overline{\delta(X_i,P):\Dict(P,X_i)}.\
-      \lambdastar\ \overline{y_j:\trans{\tau_j}}.\
-        \appstar(
-          \mu(S,m)[\overline{X_i}]\
-            \overline{\delta(X_i,P)}\
-            t,
-          \overline{y_j})
+      \elab M_S
   }
 
 \inferrule*[Right=\textsc{E-ConstrainedMethod}]
   {
-    \Psi;\Omega;\Gamma;\rho;\Delta \has e:X \elab t \\
+    \ectx \has e:X \elab t \\
     X:\overline{P}\in\Omega \\
     P_k\in\overline{P} \\
     \Psi_P(P_k)(m)=
@@ -694,33 +687,23 @@ The essential non-homomorphic rules are generic application, method lookup, exis
     \Delta(X,P_k)=d
   }
   {
-    \Psi;\Omega;\Gamma;\rho;\Delta
-      \has e.m:
+    \ectx \has e.m:
       [\Self\mapsto X]
       \left(
         \ftype{\overline{Y_i:\overline{Q_i}}}
                {\overline{\ell_j:\tau_j}}
                {\tau_r}
       \right)
-      \elab
-      \Lambda \overline{Y_i}.\
-      \lambda \overline{\delta(Y_i,Q):\Dict(Q,Y_i)}.\
-      \lambdastar\ \overline{y_j:\trans{[\Self\mapsto X]\tau_j}}.\
-        \appstar(
-          d.m[\overline{Y_i}]\
-            \overline{\delta(Y_i,Q)}\
-            t,
-          \overline{y_j})
+      \elab M_X
   }
 
 \inferrule*[Right=\textsc{E-AsAny}]
   {
-    \Psi;\Omega;\Gamma;\rho;\Delta \has e:\tau \elab t \\
+    \ectx \has e:\tau \elab t \\
     \Psi;\Omega;\Delta \has \tau \modelsP P \elab d
   }
   {
-    \Psi;\Omega;\Gamma;\rho;\Delta
-      \has e\ \kw{as}\ \Any{P}:\Any{P}
+    \ectx \has e\ \kw{as}\ \Any{P}:\Any{P}
       \elab
       \pack[\trans{\tau},\{\kw{value}=t,\kw{dict}=d\}]
       \ \kw{as}\
@@ -728,13 +711,33 @@ The essential non-homomorphic rules are generic application, method lookup, exis
   }
 \end{mathpar}
 
+where the method-selection target terms are:
+\[
+\begin{aligned}
+M_S &=
+  \Lambda \overline{X_i}.\
+  \lambda \overline{\delta(X_i,P):\Dict(P,X_i)}.\
+  \lambdastar\ \overline{y_j:\trans{\tau_j}}.\
+  \appstar(
+    \mu(S,m)[\overline{X_i}]\ \overline{\delta(X_i,P)}\ t,
+    \overline{y_j}),\\
+M_X &=
+  \Lambda \overline{Y_i}.\
+  \lambda \overline{\delta(Y_i,Q):\Dict(Q,Y_i)}.\
+  \lambdastar\ \overline{y_j:\trans{[\Self\mapsto X]\tau_j}}.\
+  \appstar(
+    d.m[\overline{Y_i}]\ \overline{\delta(Y_i,Q)}\ t,
+    \overline{y_j}).
+\end{aligned}
+\]
+
 Existential method selection opens the package and immediately calls the dictionary method on the hidden receiver.
 The visible function returned by member access abstracts over method type parameters, required dictionaries, and the remaining method arguments.
 
 \begin{mathpar}
 \inferrule*[Right=\textsc{E-ExistentialMethod}]
   {
-    \Psi;\Omega;\Gamma;\rho;\Delta \has e:\Any{P}\elab t \\
+    \ectx \has e:\Any{P}\elab t \\
     \Psi_P(P)(m)=
       \ftype{\overline{Y_i:\overline{Q_i}}}
              {\epsilon:\Self,\overline{\ell_j:\tau_j}}
@@ -743,23 +746,28 @@ The visible function returned by member access abstracts over method type parame
     \Self\notin\fv(\tau_r)
   }
   {
-    \Psi;\Omega;\Gamma;\rho;\Delta
-      \has e.m:
+    \ectx \has e.m:
       \ftype{\overline{Y_i:\overline{Q_i}}}
              {\overline{\ell_j:\tau_j}}
              {\tau_r}
-      \elab
-      \Lambda \overline{Y_i}.\
-      \lambda \overline{\delta(Y_i,Q):\Dict(Q,Y_i)}.\
-      \lambdastar\ \overline{y_j:\trans{\tau_j}}.\
-      \unpack\ \{X,z\}=t\ \tin\
-        \appstar(
-          z.\kw{dict}.m[\overline{Y_i}]\
-            \overline{\delta(Y_i,Q)}\
-            z.\kw{value},
-          \overline{y_j})
+      \elab M_{\exists}
   }
 \end{mathpar}
+
+\[
+\begin{aligned}
+M_{\exists} =
+  \Lambda \overline{Y_i}.\
+  \lambda \overline{\delta(Y_i,Q):\Dict(Q,Y_i)}.\
+  \lambdastar\ \overline{y_j:\trans{\tau_j}}.\
+  \unpack\ \{X,z\}=t\ \tin\
+  \appstar(
+    z.\kw{dict}.m[\overline{Y_i}]\
+      \overline{\delta(Y_i,Q)}\
+      z.\kw{value},
+    \overline{y_j}).
+\end{aligned}
+\]
 
 Inside the unpack body, $z.\kw{value}:X$ and $z.\kw{dict}:\Dict(P,X)$.
 The dictionary method has the requirement type translated with protocol \Self interpreted as $X$.
@@ -773,32 +781,30 @@ An empty sequence produces unit; a sequence whose first expression is not the fi
 \begin{mathpar}
 \inferrule*[Right=\textsc{ES-Empty}]
   { }
-  { \Psi;\Omega;\Gamma;\rho;\Delta \has \epsilon:\Unit \elab () }
+  { \ectx \has \epsilon:\Unit \elab () }
 
 \inferrule*[Right=\textsc{ES-Expr-Last}]
-  { \Psi;\Omega;\Gamma;\rho;\Delta \has e:\tau \elab t }
-  { \Psi;\Omega;\Gamma;\rho;\Delta \has e;\epsilon:\tau \elab t }
+  { \ectx \has e:\tau \elab t }
+  { \ectx \has e;\epsilon:\tau \elab t }
 
 \inferrule*[Right=\textsc{ES-Expr-Cons}]
   {
-    \Psi;\Omega;\Gamma;\rho;\Delta \has e:\tau_1 \elab t_1 \\
-    \Psi;\Omega;\Gamma;\rho;\Delta \has ss:\tau_2 \elab t_2
+    \ectx \has e:\tau_1 \elab t_1 \\
+    \ectx \has ss:\tau_2 \elab t_2
   }
   {
-    \Psi;\Omega;\Gamma;\rho;\Delta
-      \has e;ss:\tau_2
+    \ectx \has e;ss:\tau_2
       \elab
       (\lambda \_:\trans{\tau_1}.\ t_2)\ t_1
   }
 
 \inferrule*[Right=\textsc{ES-Let}]
   {
-    \Psi;\Omega;\Gamma;\rho;\Delta \has e:\tau_x \elab t_x \\
+    \ectx \has e:\tau_x \elab t_x \\
     \Psi;\Omega;\Gamma,x:\tau_x;\rho;\Delta \has ss:\tau \elab t
   }
   {
-    \Psi;\Omega;\Gamma;\rho;\Delta
-      \has \kw{let}\ x:\tau_x=e;\ ss:\tau
+    \ectx \has \kw{let}\ x:\tau_x=e;\ ss:\tau
       \elab
       (\lambda x:\trans{\tau_x}.\ t)\ t_x
   }
@@ -816,18 +822,21 @@ An empty sequence produces unit; a sequence whose first expression is not the fi
     \Psi;\Omega;\Gamma,f:\sigma;\rho;\Delta \has ss:\tau \elab t
   }
   {
-    \Psi;\Omega;\Gamma;\rho;\Delta
-      \has
+    \ectx \has
       \kw{func}\ f\langle\overline{X_i:\overline{P_i}}\rangle
       (\overline{\ell_j\ x_j:\tau_j})\to\tau_r\ \{ss_f\};\ ss
       :\tau
       \elab
-      (\lambda f:\trans{\sigma}.\ t)
-      (\Lambda \overline{X_i}.\
-       \lambda \overline{\delta(X_i,P):\Dict(P,X_i)}.\
-       \lambda \overline{x_j:\trans{\tau_j}}.\ t_f)
+      (\lambda f:\trans{\sigma}.\ t)\ M_f
   }
 \end{mathpar}
+
+\[
+M_f =
+  \Lambda \overline{X_i}.\
+  \lambda \overline{\delta(X_i,P):\Dict(P,X_i)}.\
+  \lambdastar\ \overline{x_j:\trans{\tau_j}}.\ t_f.
+\]
 
 Local function declarations use the same generated function term as \textsc{E-Fun}, then bind it locally before elaborating the rest of the sequence.
 The function name is available only in the following sequence, not in its own body.
@@ -836,6 +845,20 @@ The function name is available only in the following sequence, not in its own bo
 
 Struct and extension methods elaborate to top-level core functions.
 For a method body checked with receiver struct $S$, the generated function abstracts over method type parameters, dictionary parameters for method constraints, the receiver $\kw{self}:S$, and then ordinary parameters.
+The declaration elaboration rules are written schematically as follows.
+For top-level lets and functions:
+\[
+\begin{array}{rcl}
+\kw{let}\ x:\tau=e &\elab& x=t
+  \quad\text{if }\Psi;\emptyctx;\emptyctx;\bot;\emptyctx
+  \has e:\tau\elab t,\\[1mm]
+\kw{func}\ f:\sigma\ \{ss_f\} &\elab& f=M_f
+  \quad\text{if the body elaborates to }t_f.
+\end{array}
+\]
+For a method declaration owned by $S$, elaboration emits
+$\mu(S,m)=M_{S,m}$, where $M_{S,m}$ is the same function wrapper as $M_f$ except that it has an additional explicit receiver parameter
+$\kw{self}:\trans{S}$ before the ordinary method parameters.
 An extension $S:P$ elaborates to a dictionary record
 \[
   \delta(S,P)=\{\overline{m_i=\mu(S,m_i)}\}
@@ -860,6 +883,10 @@ Let
   \mathcal{G}_\Psi;\trans{\Omega};\trans{\Gamma};\trans{\Delta}
 \]
 be the translated core context.
+Throughout the proof we assume the standard well-formedness invariants produced by surface checking:
+$\Psi$ is well formed; $\Omega$ contains only declared protocol constraints; $\Gamma$ contains only well-formed surface types; $\Delta$ contains exactly the dictionary variables for the active constraints in $\Omega$; all struct fields, method names, and protocol requirements are distinct within their owners; and protocol requirement signatures are well formed under the protocol \Self resolver.
+The theorem below proves preservation for successful elaborations.
+The implementation performs elaboration after resolution and checking, so the elaboration relation is syntax-directed on checked ASTs; totality of that implementation pass is not part of the formal statement.
 
 \subsection{Supporting Lemmas}
 
@@ -985,6 +1012,41 @@ $t_i:\trans{\tau_i}$; the induction hypothesis handles the remaining arguments.
 The labeled case is identical after the deterministic matcher selects the corresponding formal parameter and orders the typed AST.
 \qed
 
+\paragraph{Lemma 9: Function wrappers preserve typing.}
+Let
+\[
+  \sigma=
+  \ftype{\overline{X_i:\overline{P_i}}}
+         {\overline{\ell_j:\tau_j}}
+         {\tau_r}.
+\]
+If
+\[
+  \mathcal{G}_\Psi;
+  \trans{\Omega,\overline{X_i:\overline{P_i}}};
+  \trans{\Gamma,\overline{x_j:\tau_j}};
+  \trans{\Delta,\overline{(X_i,P)=\delta(X_i,P)}}
+  \has_c t_f:\trans{\tau_r},
+\]
+then the generated wrapper
+\[
+  \Lambda \overline{X_i}.\
+  \lambda \overline{\delta(X_i,P):\Dict(P,X_i)}.\
+  \lambdastar\ \overline{x_j:\trans{\tau_j}}.\ t_f
+\]
+has type $\trans{\sigma}$ in $\mathcal{E}$.
+The same statement holds for method wrappers after adding the explicit receiver parameter $\kw{self}:\trans{S}$ as the first ordinary parameter.
+
+\paragraph{Proof.}
+By repeated use of the core rules for type abstraction and function abstraction.
+Each source type parameter becomes a core type variable.
+Each protocol constraint $X_i:P$ becomes a dictionary parameter of type $\Dict(P,X_i)$.
+Each ordinary parameter $x_j:\tau_j$ becomes a core parameter $x_j:\trans{\tau_j}$.
+The premise gives the body type $\trans{\tau_r}$ under exactly this extended core context.
+The zero-argument case is covered by the $\lambdastar$ convention, which abstracts over a single \Unit\ argument and therefore inhabits $\Unit\to\trans{\tau_r}$.
+The method case is identical, with the receiver parameter included in the ordinary parameter list.
+\qed
+
 \subsection{Preservation Theorems}
 
 \paragraph{Theorem 1: Evidence elaboration preserves typing.}
@@ -1039,7 +1101,7 @@ For \textsc{E-Lt}, \textsc{E-Gt}, \textsc{E-Le}, and \textsc{E-Ge}, the operands
 For \textsc{E-Fun}, extend $\Omega$ with the type parameters, extend $\Delta$ with one dictionary variable for every protocol constraint, and extend $\Gamma$ with the ordinary value parameters.
 By Lemmas 2 and 3 the translated parameter types are well formed.
 The induction hypothesis gives the body type $\trans{\tau_r}$ in the extended core context.
-Successive core type abstractions, dictionary lambdas, and ordinary lambdas therefore have exactly the translated function-scheme type.
+Lemma 9 gives that the generated wrapper has exactly the translated function-scheme type.
 
 For \textsc{E-TypeApp}, the induction hypothesis gives the translated polymorphic type of the callee.
 Core type application instantiates the universal variables with $\trans{\tau_i'}$.
@@ -1114,7 +1176,9 @@ The generated term $(\lambda\_:\trans{\tau_1}.\ t_2)\ t_1$ has type $\trans{\tau
 In \textsc{ES-Let}, Theorem 2 gives the initializer $t_x:\trans{\tau_x}$.
 The induction hypothesis, applied under the extended context $\Gamma,x:\tau_x$, gives the body $t:\trans{\tau}$.
 The generated lambda application therefore has type $\trans{\tau}$.
-For a local function declaration, the generated function term is typed by the \textsc{E-Fun} case of Theorem 2, and the induction hypothesis types the remaining sequence under the extended binding for the function.
+For a local function declaration, the induction hypothesis gives the body of the local function in the context extended with its type parameters, dictionaries, and value parameters.
+Lemma 9 types the generated function wrapper at $\trans{\sigma}$.
+The induction hypothesis then types the remaining sequence under the extended binding for $f$, and the final lambda application preserves the result type.
 \qed
 
 \paragraph{Theorem 4: Declaration elaboration preserves typing.}
@@ -1129,7 +1193,7 @@ For a top-level let declaration, surface typing gives $\Psi;\emptyctx;\emptyctx;
 Expression preservation gives the elaborated initializer type $\trans{\tau}$, so the generated binding $x=t$ is well typed.
 
 For a top-level function, statement-sequence preservation applies to the body under the function's type parameters, dictionary evidence parameters, and ordinary parameters.
-By core type abstraction and lambda typing, the generated binding has the translated function-scheme type.
+Lemma 9 then gives the generated binding the translated function-scheme type.
 For a method declaration owned by $S$, the same argument applies, except that the local context also contains the explicit receiver $\kw{self}:S$.
 The resulting top-level method function has type $\trans{\Psi_M(S)(m)}$.
 
@@ -1138,7 +1202,9 @@ $m_i:\sigma_i$ of $P$ is implemented by a method of $S$ whose type is
 $[\Self\mapsto S]\sigma_i$.
 The method case above gives
 $\mu(S,m_i):\trans{[\Self\mapsto S]\sigma_i}$.
-By the definition of $\Dict(P,\trans{S})$, this is exactly the expected field type for $m_i$.
+By Lemma 6,
+$\trans{[\Self\mapsto S]\sigma_i}=\transSelf{\trans{S}}{\sigma_i}$.
+This is exactly the field type expected by $\Dict(P,\trans{S})$.
 The core record-introduction rule therefore gives
 $\delta(S,P)=\{\overline{m_i=\mu(S,m_i)}\}:\Dict(P,\trans{S})$.
 \qed
@@ -1184,11 +1250,10 @@ Surface arithmetic and Boolean operators are not primitive core syntax; they are
 \section{Implementation Status and Limitations}
 
 The implementation already supports the proof-relevant path described above:
-Swift-style parameter labels, structs, protocols, extensions, constrained generic functions, dictionary-passing elaboration, existential packaging with $e\ \kw{as}\ \Any{P}$, and restricted existential-safe method calls.
+Swift-style parameter labels, structs, protocols, extensions, constrained generic functions, dictionary-passing elaboration, existential packaging with $e\ \kw{as}\ \Any{P}$, and existential-safe method calls, including method-local type parameters.
 The arithmetic and boolean operators are surface syntax that elaborates into existing core terms.
 
 Important limitations remain.
-Generic methods on existential packages are rejected.
 There is no surface-level explicit unpack.
 Surface $\Int$ is currently represented by core $\Nat$, so it does not match Swift's signed integer semantics.
 String concatenation is not implemented because the core language lacks the primitive.
