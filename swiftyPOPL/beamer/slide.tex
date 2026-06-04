@@ -1,0 +1,31 @@
+% [] used in the footer, {} used in the title
+\author[Runbang Yan]{Runbang Yan}
+\title[\lang]{\lang: \\
+A Swift-like Surface Language with Protocol Elaboration}
+\institute[PKU]
+{
+  School of Computer Science, Peking University
+}
+
+\date[TAPL Final Presentation]{TAPL Final Presentation}
+
+% plain: remove all header and footer in this page
+\begin{frame}[plain]
+    % show pku logo in the upper center of title page
+    \centering
+    \includegraphics[width=4.5cm]{pkulogo.png}
+    \vspace{-5mm}
+    \titlepage
+\end{frame}
+
+\begin{frame}[plain]
+\frametitle{Table of Contents}
+\hfill
+\parbox[t]{.95\textwidth}{
+  \begin{minipage}[t][0.8\textheight]{0.95\textwidth}
+\tableofcontents[sectionstyle=show,subsectionstyle=show/shaded/hide,subsubsectionstyle=show/shaded/hide]
+  \end{minipage}
+}
+\end{frame}
+
+\input{contents}

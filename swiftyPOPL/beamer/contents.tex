@@ -1,0 +1,427 @@
+\section{Motivation}
+
+\begin{frame}{Why Protocol-Oriented Programming?}
+\small
+\begin{itemize}
+  \item Traditional OOP reuses code through class inheritance.
+  \item This often creates fragile base classes, deep hierarchies, and early design commitments.
+  \item Modern languages increasingly use interface-style abstraction:
+    Go interfaces, Rust traits, and Swift protocols.
+  \item Swift-style protocols combine several type-theoretic ideas:
+    parametric polymorphism, ad-hoc polymorphism, first-class polymorphic functions, and existential values.
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Project Goal}
+\small
+\begin{block}{Goal}
+Design and implement a small Swift-like language whose protocol features can be elaborated into a standard typed core calculus.
+\end{block}
+
+\vspace{1mm}
+\begin{itemize}
+  \item Surface language: structs, protocols, extensions, constrained generics, first-class functions, and \texttt{any P}.
+  \item Core language: System F with records, existentials, conditionals, and natural-number primitives.
+  \item Main metatheoretic claim:
+  \[
+    \text{well-typed surface program}
+    \quad\Longrightarrow\quad
+    \text{well-typed elaborated core program}.
+  \]
+\end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]{A Small Example}
+\small
+\begin{lstlisting}
+protocol Named {
+  func name() -> String
+}
+
+struct Screen {
+  let identifier: Int
+}
+
+extension Screen: Named {
+  func name() -> String { "Home" }
+}
+
+func keepNamed<T: Named>(item: T) -> T {
+  item
+}
+
+let screen: Screen = Screen(identifier: 1)
+let kept: Screen = keepNamed<Screen>(item: screen)
+kept.name()
+\end{lstlisting}
+\end{frame}
+
+\section{Language}
+
+\begin{frame}{Surface Fragment}
+\small
+\begin{itemize}
+  \item Nominal structs:
+  \[
+    \kw{struct}\ S\ \{\overline{\kw{let}\ x:\tau};\ \overline{md}\}
+  \]
+  \item Protocol requirements:
+  \[
+    \kw{protocol}\ P\ \{\overline{m:\sigma}\}
+  \]
+  \item Conformances via extensions:
+  \[
+    \kw{extension}\ S:P\ \{\overline{md}\}
+  \]
+  \item Generic function schemes:
+  \[
+    \ftype{\overline{X:\overline{P}}}{\overline{\ell:\tau}}{\tau}
+  \]
+  \item Existential protocol values:
+  \[
+    \Any{P}
+  \]
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Typing Environments}
+\small
+\[
+\Psi=(\Psi_S,\Psi_P,\Psi_C,\Psi_M,\Psi_V)
+\]
+
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+Component & Meaning \\
+\midrule
+$\Psi_S(S)$ & fields of struct $S$ \\
+$\Psi_P(P)$ & requirements of protocol $P$ \\
+$\Psi_C(S,P)$ & conformance methods for $S:P$ \\
+$\Psi_M(S)$ & methods available on struct $S$ \\
+$\Psi_V(x)$ & top-level values and functions \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\vspace{1mm}
+\begin{itemize}
+  \item $\Omega$ tracks generic protocol constraints, such as $X:P$.
+  \item $\Gamma$ tracks local value variables.
+  \item $\rho$ resolves \Self\ in struct, extension, and protocol contexts.
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Protocol Satisfaction}
+\small
+Only two kinds of surface types satisfy protocols:
+
+\[
+\inferrule*[Right=\textsc{Sat-Struct}]
+  {(S,P)\in\dom(\Psi_C)}
+  {\Psi;\Omega\vdash S\modelsP P}
+\qquad
+\inferrule*[Right=\textsc{Sat-TVar}]
+  {X:\overline{P}\in\Omega \\ P\in\overline{P}}
+  {\Psi;\Omega\vdash X\modelsP P}
+\]
+
+\vspace{2mm}
+\begin{itemize}
+  \item A concrete struct satisfies a protocol through an extension.
+  \item A type variable satisfies a protocol through a generic constraint.
+  \item An existential value \Any{P} does \emph{not} itself satisfy $P$.
+  \item To use its dictionary, elaboration must open the existential package.
+\end{itemize}
+\end{frame}
+
+\section{Elaboration}
+
+\begin{frame}{Core Target}
+\small
+\begin{block}{Core calculus}
+System F + records + existentials + conditionals + recursion and natural-number primitives.
+\end{block}
+
+\[
+\begin{array}{rcl}
+A &::=& \Nat \mid \Bool \mid \String \mid \Unit
+       \mid X \mid A\to A \mid \forall X.A
+       \mid \{\overline{l:A}\} \mid \exists X.A
+\\[1mm]
+t &::=& x \mid \lambda x:A.t \mid t\ t
+       \mid \Lambda X.t \mid t[A]
+       \mid \{\overline{l=t}\} \mid t.l
+       \mid \kw{pack} \mid \kw{unpack}\ \ldots
+\end{array}
+\]
+
+\vspace{1mm}
+The surface checker handles Swift-like syntax; elaboration removes protocols by making evidence explicit.
+\end{frame}
+
+\begin{frame}{Type Translation}
+\small
+\[
+\begin{array}{rcl}
+\trans{\Int} &=& \Nat \\
+\trans{S} &=& \{\overline{x:\trans{\tau}}\}
+  \quad\text{where }\Psi_S(S)=\{\overline{x:\tau}\} \\
+\trans{\Any{P}} &=&
+  \exists X.\{\kw{value}:X,\kw{dict}:\Dict(P,X)\} \\
+\trans{\ftype{\overline{X_i:\overline{P_i}}}
+              {\overline{\ell_j:\tau_j}}
+              {\tau_r}}
+  &=&
+  \forall\overline{X_i}.\
+  \trans{\overline{X_i:\overline{P_i}}}
+  \to
+  \trans{\tau_1}\to\cdots\to\trans{\tau_r}
+\end{array}
+\]
+
+\vspace{1mm}
+\begin{itemize}
+  \item Each generic constraint $X:P$ becomes a dictionary parameter of type $\Dict(P,X)$.
+  \item A protocol dictionary is a record of methods:
+  \[
+    \Dict(P,A)=\{\overline{m_i:\transSelf{A}{\sigma_i}}\}.
+  \]
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Elaboration as Dictionary Passing}
+\small
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+Surface feature & Core representation \\
+\midrule
+Protocol declaration & dictionary record type \\
+Extension conformance & dictionary value \\
+Constrained generic & explicit dictionary parameter \\
+Method call on $S$ & top-level method function + receiver \\
+Method call on $X:P$ & dictionary projection + receiver \\
+\Any{P} value & existential package with value and dictionary \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\vspace{2mm}
+\[
+e\ \kw{as}\ \Any{P}
+\quad\elab\quad
+\kw{pack}[\trans{\tau},\{\kw{value}=t,\kw{dict}=d\}]
+\]
+\end{frame}
+
+\begin{frame}{Existential Method Selection}
+\small
+\[
+\trans{\Any{P}}
+  = \exists X.\{\kw{value}:X,\kw{dict}:\Dict(P,X)\}
+\]
+
+\vspace{1mm}
+For $e.m$, where $e:\Any{P}$:
+\[
+\begin{aligned}
+M_{\exists} =
+  &\Lambda \overline{Y}.\
+  \lambda \overline{d_Y:\Dict(Q,Y)}.\
+  \lambda \overline{y:\trans{\tau}}.\\
+  &\kw{unpack}\ \{X,z\}=t\ \kw{in}\
+    z.\kw{dict}.m[\overline{Y}]\
+      \overline{d_Y}\
+      z.\kw{value}\
+      \overline{y}
+\end{aligned}
+\]
+
+\vspace{1mm}
+\begin{itemize}
+  \item Method-local type parameters are preserved.
+  \item The hidden witness type $X$ is used only inside the unpack body.
+  \item Safety condition: visible argument and result types must not mention protocol \Self.
+\end{itemize}
+\end{frame}
+
+\section{Metatheory}
+
+\begin{frame}{What We Prove}
+\small
+\begin{block}{Elaboration preservation}
+If a surface expression, declaration, or program type checks, then its elaborated core term has the translated type.
+\end{block}
+
+\[
+\Psi;\Omega;\Gamma;\rho\vdash e:\tau
+\quad\text{and}\quad
+\Psi;\Omega;\Gamma;\rho;\Delta\vdash e:\tau\elab t
+\]
+\[
+\Longrightarrow
+\qquad
+\mathcal{G}_{\Psi};\trans{\Omega};\trans{\Gamma};\trans{\Delta}
+\vdash_c t:\trans{\tau}.
+\]
+
+\vspace{1mm}
+Core progress and preservation are assumed as standard TAPL-style results for the target calculus.
+\end{frame}
+
+\begin{frame}{Key Lemmas}
+\small
+\begin{enumerate}
+  \item Surface type translation is defined.
+  \item Type translation preserves well-formedness.
+  \item Dictionary types are well formed.
+  \item Context translation is well formed.
+  \item Translation commutes with type substitution.
+  \item Resolved \Self\ substitution matches self-parameterized translation.
+  \item \Self-free types are stable under opening existentials.
+  \item Argument elaboration preserves typing.
+  \item Function wrappers preserve typing.
+\end{enumerate}
+\end{frame}
+
+\begin{frame}{Main Theorem Chain}
+\small
+\[
+\begin{array}{c}
+\text{Evidence elaboration preserves typing}
+\\ \Downarrow \\
+\text{Expression elaboration preserves typing}
+\\ \Downarrow \\
+\text{Statement sequence elaboration preserves typing}
+\\ \Downarrow \\
+\text{Declaration elaboration preserves typing}
+\\ \Downarrow \\
+\text{Program elaboration preserves typing}
+\\ \Downarrow \\
+\text{End-to-end safety, assuming core soundness}
+\end{array}
+\]
+
+\vspace{2mm}
+The proof is by induction over elaboration derivations, with standard structural properties such as weakening, exchange, and alpha-renaming.
+\end{frame}
+
+\begin{frame}{Interesting Case: Generic Application}
+\small
+Surface type application checks constraints:
+\[
+e:\ftype{\overline{X_i:\overline{P_i}}}{\overline{\ell_j:\tau_j}}{\tau_r}
+\qquad
+\Psi;\Omega\vdash \tau_i' \modelsP P
+\]
+
+\vspace{1mm}
+Elaboration inserts dictionary evidence:
+\[
+e\langle\overline{\tau_i'}\rangle
+\quad\elab\quad
+t[\overline{\trans{\tau_i'}}]\ \overline{d_{i,P}}
+\]
+
+\vspace{1mm}
+\begin{itemize}
+  \item Evidence preservation gives
+  $d_{i,P}:\Dict(P,\trans{\tau_i'})$.
+  \item Core type application and function application yield the instantiated result.
+  \item Translation-substitution commutation connects the core type back to the surface result.
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Interesting Case: Existentials}
+\small
+For packaging:
+\[
+\Psi;\Omega;\Gamma;\rho\vdash e:\tau
+\qquad
+\Psi;\Omega\vdash \tau\modelsP P
+\]
+\[
+e\ \kw{as}\ \Any{P}
+\quad\elab\quad
+\kw{pack}[\trans{\tau},\{\kw{value}=t,\kw{dict}=d\}]
+\]
+
+\vspace{2mm}
+For selection:
+\begin{itemize}
+  \item Open the existential package.
+  \item Project its dictionary.
+  \item Call the method on the hidden receiver.
+  \item Use the \Self-free side condition to prevent the hidden type from escaping.
+\end{itemize}
+\end{frame}
+
+\section{Implementation}
+
+\begin{frame}{Implementation Pipeline}
+\small
+\[
+\begin{array}{c}
+\text{source file}
+\to
+\text{lexer/parser}
+\to
+\text{resolver}
+\to
+\text{checker}
+\\[1mm]
+\to
+\text{elaborator}
+\to
+\text{core checker/evaluator}
+\end{array}
+\]
+
+\vspace{2mm}
+\begin{itemize}
+  \item Resolver collects nominal names and resolves \Self.
+  \item Checker builds global environments, checks conformances, matches labels, and enforces existential safety.
+  \item Elaborator performs dictionary-passing translation and renders core syntax.
+  \item Core interpreter type checks and evaluates the elaborated program.
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Supported Examples}
+\small
+\begin{itemize}
+  \item Table-view style delegates using existential protocol values.
+  \item iOS settings screen model with existential delegates.
+  \item First-class polymorphic identity functions.
+  \item Struct fields containing polymorphic functions.
+  \item Constrained generic functions elaborated with dictionary passing.
+  \item Existential-safe method calls, including method-local type parameters.
+\end{itemize}
+
+\vspace{2mm}
+\begin{block}{Run}
+\texttt{moon run src -- examples/<file>.swift}
+\end{block}
+\end{frame}
+
+\section{Conclusion}
+
+\begin{frame}{Takeaways}
+\small
+\begin{itemize}
+  \item \lang\ isolates a proof-relevant subset of Swift-style protocol-oriented programming.
+  \item Protocol constraints are compiled into explicit dictionary parameters.
+  \item Existential protocol values are encoded using ordinary existential types.
+  \item The paper proof shows that elaboration preserves typing.
+  \item Therefore, surface safety follows from the assumed soundness of the core calculus.
+\end{itemize}
+\end{frame}
+
+\begin{frame}[plain]
+\centering
+\vspace{20mm}
+{\Large Thank you!}
+
+\vspace{8mm}
+{\small Questions?}
+\end{frame}
