@@ -2,6 +2,7 @@
 
 \usepackage{array}
 \usepackage{mathtools}
+\usepackage{xspace}
 \usepackage{stmaryrd}
 \usepackage{mathpartir}
 
@@ -19,7 +20,7 @@
 \newcommand{\String}{\kw{String}}
 \newcommand{\Unit}{\kw{Unit}}
 \newcommand{\Nat}{\kw{Nat}}
-\newcommand{\Self}{\kw{Self}}
+\newcommand{\Self}{\kw{Self}\xspace}
 \newcommand{\Any}[1]{\kw{any}\ #1}
 \newcommand{\ok}{\ \kw{ok}}
 \newcommand{\dom}{\operatorname{dom}}
@@ -197,9 +198,13 @@ This convention is what lets member access elaborate into ordinary function appl
 \subsection{Well-Formed Types and \Self}
 
 The judgment $\Psi;\Omega;\rho \has \tau\ok$ means that $\tau$ is well formed.
-Base types are always well formed; nominal types must be declared; type variables must be in $\Omega$; $\Self$ is available only when $\rho\neq\bot$; and $\Any{P}$ is well formed only when $P$ is declared.
+Base types are always well formed; nominal types must be declared; type variables must be in $\Omega$; $\Self$ is available only when $\rho\neq\bot$; $\Any{P}$ is well formed only when $P$ is declared; and function schemes are checked under their own type parameters and declared protocol constraints.
 
 \begin{mathpar}
+\inferrule*[Right=\textsc{WF-Base}]
+  { \tau_b\in\{\Int,\Bool,\String,\Unit\} }
+  { \Psi;\Omega;\rho \has \tau_b\ok }
+
 \inferrule*[Right=\textsc{WF-Struct}]
   { S\in\dom(\Psi_S) }
   { \Psi;\Omega;\rho \has S\ok }
@@ -207,7 +212,9 @@ Base types are always well formed; nominal types must be declared; type variable
 \inferrule*[Right=\textsc{WF-TVar}]
   { X\in\dom(\Omega) }
   { \Psi;\Omega;\rho \has X\ok }
+\end{mathpar}
 
+\begin{mathpar}
 \inferrule*[Right=\textsc{WF-Self}]
   { \rho\neq\bot }
   { \Psi;\Omega;\rho \has \Self\ok }
@@ -215,6 +222,29 @@ Base types are always well formed; nominal types must be declared; type variable
 \inferrule*[Right=\textsc{WF-Any}]
   { P\in\dom(\Psi_P) }
   { \Psi;\Omega;\rho \has \Any{P}\ok }
+\end{mathpar}
+
+\begin{mathpar}
+\inferrule*[Right=\textsc{WF-Fun}]
+  {
+    \overline{X_i}\ \text{distinct}
+    \\
+    \forall i,k.\ P_{ik}\in\dom(\Psi_P)
+    \\
+    \Psi;\Omega,\overline{X_i:\overline{P_{ik}}};\rho
+      \has \overline{\tau_j}\ok
+    \\
+    \Psi;\Omega,\overline{X_i:\overline{P_{ik}}};\rho
+      \has \tau_r\ok
+  }
+  {
+    \Psi;\Omega;\rho
+      \has
+      \ftype{\overline{X_i:\overline{P_{ik}}}}
+            {\overline{\ell_j:\tau_j}}
+            {\tau_r}
+      \ok
+  }
 \end{mathpar}
 
 Inside a struct or extension declaration, \Self resolves to the concrete receiver struct.
@@ -634,8 +664,110 @@ The boolean connectives preserve short-circuiting because the second operand app
 
 Most expression rules are homomorphic.
 The essential non-homomorphic rules are generic application, method lookup, existential packaging, and existential-safe method selection.
-The omitted homomorphic rules translate literals, variables, calls, field access, construction, conditionals, and primitive operators structurally to the corresponding core form described above.
-They do not create new type abstractions, dictionaries, or existential packages.
+The homomorphic rules below translate literals, variables, calls, field access, construction, and conditionals structurally to the corresponding core form.
+Primitive operators use the translations from the previous subsection.
+These rules do not create new type abstractions, dictionaries, or existential packages.
+
+\begin{mathpar}
+\inferrule*[Right=\textsc{E-Int}]
+  { }
+  { \ectx \has n:\Int \elab n }
+
+\inferrule*[Right=\textsc{E-Bool}]
+  { }
+  { \ectx \has b:\Bool \elab b }
+
+\inferrule*[Right=\textsc{E-String}]
+  { }
+  { \ectx \has s:\String \elab s }
+
+\inferrule*[Right=\textsc{E-Var}]
+  { x:\tau\in\Gamma\ \text{or}\ \Psi_V(x)=\tau }
+  { \ectx \has x:\tau \elab x }
+
+\inferrule*[Right=\textsc{E-Self}]
+  { \kw{self}:S\in\Gamma }
+  { \ectx \has \kw{self}:S \elab \kw{self} }
+\end{mathpar}
+
+\begin{mathpar}
+\inferrule*[Right=\textsc{E-Call}]
+  {
+    \ectx \has e:\ftype{\emptyctx}{\overline{\ell_i:\tau_i}}{\tau_r}
+      \elab t \\
+    \ectx \has \overline{a_i}\Leftarrow\overline{\ell_i:\tau_i}
+      \elab \overline{u_i}
+  }
+  {
+    \ectx \has e(\overline{a_i}):\tau_r
+      \elab \appstar(t,\overline{u_i})
+  }
+
+\inferrule*[Right=\textsc{E-Construct}]
+  {
+    \Psi_S(S)=\{\overline{x_i:\tau_i}\} \\
+    \ectx \has \overline{a_i}\Leftarrow\overline{x_i:\tau_i}
+      \elab \overline{t_i}
+  }
+  {
+    \ectx \has S(\overline{a_i}):S
+      \elab \{\overline{x_i=t_i}\}
+  }
+
+\inferrule*[Right=\textsc{E-Field}]
+  {
+    \ectx \has e:S \elab t \\
+    \Psi_S(S)(x)=\tau
+  }
+  {
+    \ectx \has e.x:\tau \elab t.x
+  }
+\end{mathpar}
+
+\begin{mathpar}
+\inferrule*[Right=\textsc{E-IfElse}]
+  {
+    \ectx \has e:\Bool \elab t \\
+    \ectx \has ss_1:\tau \elab t_1 \\
+    \ectx \has ss_2:\tau \elab t_2
+  }
+  {
+    \ectx \has
+      \kw{if}\ e\ \{ss_1\}\ \kw{else}\ \{ss_2\}:\tau
+      \elab
+      \kw{if}\ t\ \kw{then}\ t_1\ \kw{else}\ t_2
+  }
+\end{mathpar}
+
+Function values are non-homomorphic because constrained type parameters elaborate to explicit dictionary parameters before the ordinary value parameters.
+
+\begin{mathpar}
+\inferrule*[Right=\textsc{E-Fun}]
+  {
+    \Omega'=\Omega,\overline{X_i:\overline{P_i}} \\
+    \Delta'=\Delta,\overline{(X_i,P)=\delta(X_i,P)} \\
+    \Gamma_f=\Gamma,\overline{x_j:\tau_j} \\
+    \Psi;\Omega';\Gamma_f;\rho;\Delta'
+      \has ss:\tau_r \elab t_f
+  }
+  {
+    \ectx \has
+      \kw{func}\langle\overline{X_i:\overline{P_i}}\rangle
+      (\overline{\ell_j\ x_j:\tau_j})\to\tau_r\ \{ss\}
+      :
+      \ftype{\overline{X_i:\overline{P_i}}}
+             {\overline{\ell_j:\tau_j}}
+             {\tau_r}
+      \elab M_{\lambda}
+  }
+\end{mathpar}
+
+\[
+M_{\lambda} =
+  \Lambda \overline{X_i}.\
+  \lambda \overline{\delta(X_i,P):\Dict(P,X_i)}.\
+  \lambdastar\ \overline{x_j:\trans{\tau_j}}.\ t_f.
+\]
 
 \begin{mathpar}
 \inferrule*[Right=\textsc{E-TypeApp}]
@@ -890,56 +1022,49 @@ The implementation performs elaboration after resolution and checking, so the el
 
 \subsection{Supporting Lemmas}
 
-\paragraph{Lemma 1: Surface type translation is defined.}
-If $\Psi;\Omega;\rho\has\tau\ok$, then $\trans{\tau}$ is defined.
+\paragraph{Lemma 1: Type translation is total and preserves well-formedness.}
+If $\Psi;\Omega;\rho\has\tau\ok$, then $\trans{\tau}$ is defined and
+\[
+  \trans{\Psi};\trans{\Omega}\has_c\trans{\tau}\ok.
+\]
 
 \paragraph{Proof.}
-By induction on the derivation of type well-formedness.
-Base types translate by definition.
+By mutual induction with Lemma 2 on type well-formedness and protocol dictionary formation.
+Base types translate by definition and are well formed by the corresponding core well-formedness rules.
 For a struct type $S$, the premise $S\in\dom(\Psi_S)$ makes $\Psi_S(S)$ defined, so $\trans{S}$ is the record type obtained by translating each declared field type.
-Those field types are well formed because program well-formedness checks declarations before elaboration.
-For a type variable $X$, well-formedness gives $X\in\dom(\Omega)$, and $\trans{X}=X$.
+Those field types are well formed because program well-formedness checks declarations before elaboration; the induction hypothesis gives their translated field types, and the core record-type rule gives $\trans{S}\ok$.
+For a type variable $X$, well-formedness gives $X\in\dom(\Omega)$, and $\trans{X}=X$ is well formed in $\trans{\Omega}$.
 For \Self, well-formedness requires $\rho\neq\bot$; in a concrete receiver context \Self has already been resolved to the receiver struct, and in a protocol requirement it is translated only by the self-parameterized translation used in dictionary formation.
-For $\Any{P}$, well-formedness gives $P\in\dom(\Psi_P)$, so $\Dict(P,X)$ is defined under a fresh $X$.
-For function schemes, the induction hypothesis applies to every parameter and result type under the extended type-variable context.
-\qed
-
-\paragraph{Lemma 2: Type translation preserves well-formedness.}
-If $\Psi;\Omega;\rho\has\tau\ok$, then $\trans{\Psi};\trans{\Omega}\has_c\trans{\tau}\ok$.
-
-\paragraph{Proof.}
-By mutual induction with Lemma 3 on type well-formedness and protocol dictionary formation.
-The base, type-variable, and struct cases follow directly from the corresponding core well-formedness rules and Lemma 1.
 For function schemes, every source type parameter becomes a core type variable, every protocol constraint becomes a dictionary argument type, and ordinary parameter/result types are well formed by the induction hypothesis.
-Dictionary argument types are well formed by Lemma 3.
+Dictionary argument types are well formed by Lemma 2.
 For $\Any{P}$, the translated type is $\exists X.\{\kw{value}:X,\kw{dict}:\Dict(P,X)\}$.
-Under fresh $X$, the field type $X$ is well formed and $\Dict(P,X)$ is well formed by Lemma 3, so the existential type is well formed.
+Under fresh $X$, the field type $X$ is well formed and $\Dict(P,X)$ is well formed by Lemma 2, so the translation is defined and the existential type is well formed.
 \qed
 
-\paragraph{Lemma 3: Dictionary types are well formed.}
+\paragraph{Lemma 2: Dictionary types are well formed.}
 If $P\in\dom(\Psi_P)$ and $\trans{\Psi};\trans{\Omega}\has_c A\ok$, then
 \[
   \trans{\Psi};\trans{\Omega}\has_c\Dict(P,A)\ok.
 \]
 
 \paragraph{Proof.}
-This is the dictionary-formation component of the mutual induction used in Lemma 2.
+This is the dictionary-formation component of the mutual induction used in Lemma 1.
 Since $P$ is declared, every requirement scheme in $\Psi_P(P)$ is well formed under resolver $P$.
 The self-parameterized translation $\transSelf{A}{\sigma_i}$ is well formed: it follows the ordinary translation for all constructors and translates each occurrence of protocol \Self as the well-formed core type $A$.
 The dictionary record is therefore well formed.
 \qed
 
-\paragraph{Lemma 4: Context translation is well formed.}
+\paragraph{Lemma 3: Context translation is well formed.}
 If $\Psi;\Omega;\Gamma;\rho$ is a well-formed surface context, $\Delta$ maps only constraints present in $\Omega$, and $\mathcal{G}_\Psi$ is well formed, then $\mathcal{E}$ is a well-formed core context.
 
 \paragraph{Proof.}
 Each type variable in $\Omega$ becomes a core type variable.
-Each local variable $x:\tau$ becomes $x:\trans{\tau}$, which is well formed by Lemma 2.
-Each evidence binding $\Delta(X,P)=d$ becomes $d:\Dict(P,X)$, which is well formed by Lemma 3.
+Each local variable $x:\tau$ becomes $x:\trans{\tau}$, which is well formed by Lemma 1.
+Each evidence binding $\Delta(X,P)=d$ becomes $d:\Dict(P,X)$, which is well formed by Lemma 2.
 The translated global bindings are well formed by the premise on $\mathcal{G}_\Psi$.
 \qed
 
-\paragraph{Lemma 5: Translation commutes with type substitution.}
+\paragraph{Lemma 4: Translation commutes with type substitution.}
 If $\tau'$ is well formed and $\tau$ is well formed under $X$, then
 \[
   \trans{\subst{\tau'}{X}\tau}
@@ -957,7 +1082,7 @@ For $\Any{P}$, the protocol name is nominal and not affected by substitution.
 The environment and scheme cases are pointwise extensions of the type case.
 \qed
 
-\paragraph{Lemma 6: Resolved \Self substitution matches self-parameterized translation.}
+\paragraph{Lemma 5: Resolved \Self substitution matches self-parameterized translation.}
 If a protocol requirement type $\tau$ is well formed under resolver $P$, and $S$ is a declared struct, then
 \[
   \trans{[\Self\mapsto S]\tau}=\transSelf{\trans{S}}{\tau}.
@@ -970,7 +1095,7 @@ The \Self case is the only non-homomorphic case: the left side resolves \Self to
 All other constructors follow from the induction hypothesis.
 \qed
 
-\paragraph{Lemma 7: \Self-free types are stable under opening existentials.}
+\paragraph{Lemma 6: \Self-free types are stable under opening existentials.}
 If $\Self\notin\fv(\tau)$, then for any core type $A$,
 \[
   \transSelf{A}{\tau}=\trans{\tau}.
@@ -983,7 +1108,7 @@ Because \Self is not free in $\tau$, the substitution never changes a leaf of th
 All type constructors are preserved by translation, so both sides are syntactically equal.
 \qed
 
-\paragraph{Lemma 8: Argument elaboration preserves typing.}
+\paragraph{Lemma 7: Argument elaboration preserves typing.}
 If the deterministic argument matcher checks actual arguments against formal parameters,
 \[
   \Psi;\Omega;\Gamma;\rho
@@ -1012,7 +1137,7 @@ $t_i:\trans{\tau_i}$; the induction hypothesis handles the remaining arguments.
 The labeled case is identical after the deterministic matcher selects the corresponding formal parameter and orders the typed AST.
 \qed
 
-\paragraph{Lemma 9: Function wrappers preserve typing.}
+\paragraph{Lemma 8: Function wrappers preserve typing.}
 Let
 \[
   \sigma=
@@ -1087,72 +1212,193 @@ then
 
 \paragraph{Proof.}
 By simultaneous induction on expression elaboration and argument elaboration derivations, using the corresponding surface typing rule.
-Lemma 8 is the argument-elaboration component of this simultaneous induction.
-\textsc{E-Int}, \textsc{E-Bool}, and \textsc{E-String} follow from the core typing rules for literals and the definitions
-$\trans{\Int}=\Nat$, $\trans{\Bool}=\Bool$, and $\trans{\String}=\String$.
-\textsc{E-Var} and \textsc{E-Self} follow from the core variable rule and context translation.
+Lemma 7 is the argument-elaboration component of this simultaneous induction.
 
-For \textsc{E-Not}, the induction hypothesis gives $t:\Bool$.
-Both branches of the generated conditional have type $\Bool$, so the core conditional rule gives the result type $\Bool$.
-\textsc{E-And} and \textsc{E-Or} are similar, using the induction hypotheses for both operands and short-circuiting conditionals.
-For \textsc{E-Add} and \textsc{E-Sub}, the induction hypotheses give both operands type $\Nat$, and the core typing facts for $\mathsf{add}$ and $\mathsf{sub}$ give a result of type $\Nat$.
-For \textsc{E-Lt}, \textsc{E-Gt}, \textsc{E-Le}, and \textsc{E-Ge}, the operands have type $\Nat$; $\mathsf{lt}$ returns $\Bool$, and the non-strict comparisons use a core conditional with two Boolean branches.
+In \textsc{E-Int}, the elaborated term is the same numeral $n$.
+Core numerals have type $\Nat$, and $\trans{\Int}=\Nat$, so
+$\mathcal{E}\has_c n:\trans{\Int}$.
+The \textsc{E-Bool} and \textsc{E-String} cases are identical: the generated terms are the same literals, core typing gives $b:\Bool$ and $s:\String$, and the type translation maps $\Bool$ and $\String$ to those same core types.
 
-For \textsc{E-Fun}, extend $\Omega$ with the type parameters, extend $\Delta$ with one dictionary variable for every protocol constraint, and extend $\Gamma$ with the ordinary value parameters.
-By Lemmas 2 and 3 the translated parameter types are well formed.
-The induction hypothesis gives the body type $\trans{\tau_r}$ in the extended core context.
-Lemma 9 gives that the generated wrapper has exactly the translated function-scheme type.
+In \textsc{E-Var}, either $x:\tau\in\Gamma$ or $\Psi_V(x)=\tau$.
+By definition of context translation, $\mathcal{E}$ contains the corresponding core binding
+$x:\trans{\tau}$, either in $\trans{\Gamma}$ or in $\mathcal{G}_\Psi$.
+The core variable rule therefore gives
+$\mathcal{E}\has_c x:\trans{\tau}$.
+The \textsc{E-Self} case is the same argument specialized to the local receiver binding
+$\kw{self}:S\in\Gamma$, giving
+$\mathcal{E}\has_c \kw{self}:\trans{S}$.
 
-For \textsc{E-TypeApp}, the induction hypothesis gives the translated polymorphic type of the callee.
-Core type application instantiates the universal variables with $\trans{\tau_i'}$.
-For each protocol constraint, Theorem 1 gives the inserted dictionary argument
+For \textsc{E-Not}, the premise elaborates the operand as
+$\ectx\has e:\Bool\elab t$.
+The induction hypothesis gives $\mathcal{E}\has_c t:\Bool$.
+The generated term is
+$\kw{if}\ t\ \kw{then}\ \kw{false}\ \kw{else}\ \kw{true}$.
+The guard has type $\Bool$, both branches have type $\Bool$, and the core conditional rule gives the required result type $\Bool=\trans{\Bool}$.
+For \textsc{E-And}, the generated term is
+$\kw{if}\ t_1\ \kw{then}\ t_2\ \kw{else}\ \kw{false}$.
+The premises and induction hypotheses give $t_1:\Bool$ and $t_2:\Bool$; hence the conditional has type $\Bool$.
+For \textsc{E-Or}, the generated term
+$\kw{if}\ t_1\ \kw{then}\ \kw{true}\ \kw{else}\ t_2$
+is typed by the same core conditional rule.
+
+For \textsc{E-Add}, the premises elaborate the operands to $t_1$ and $t_2$ with surface type $\Int$.
+The induction hypotheses give $t_1:\Nat$ and $t_2:\Nat$.
+The closed operator abbreviation satisfies
+$\has_c\mathsf{add}:\Nat\to\Nat\to\Nat$, so two applications yield
+$\mathsf{add}\ t_1\ t_2:\Nat=\trans{\Int}$.
+\textsc{E-Sub} is identical using
+$\mathsf{sub}:\Nat\to\Nat\to\Nat$.
+For \textsc{E-Lt}, the same operand types and
+$\mathsf{lt}:\Nat\to\Nat\to\Bool$ give
+$\mathsf{lt}\ t_1\ t_2:\Bool$.
+\textsc{E-Gt} swaps the operands and still has type $\Bool$.
+For \textsc{E-Le} and \textsc{E-Ge}, the inner $\mathsf{lt}$ application has type $\Bool$, and the generated conditional has Boolean branches, so the result type is $\Bool$.
+
+For \textsc{E-Fun}, let
+\[
+  \sigma=
+  \ftype{\overline{X_i:\overline{P_i}}}
+         {\overline{\ell_j:\tau_j}}
+         {\tau_r}.
+\]
+The elaboration premise checks the body under
+$\Omega'=\Omega,\overline{X_i:\overline{P_i}}$,
+$\Delta'=\Delta,\overline{(X_i,P)=\delta(X_i,P)}$,
+and $\Gamma_f=\Gamma,\overline{x_j:\tau_j}$.
+The induction hypothesis gives
+$\mathcal{G}_\Psi;\trans{\Omega'};\trans{\Gamma_f};\trans{\Delta'}
+\has_c t_f:\trans{\tau_r}$.
+Lemmas 1 and 2 justify the well-formed translated parameter and dictionary types in this extended context.
+Lemma 8 then types
+\[
+  \Lambda \overline{X_i}.\
+  \lambda \overline{\delta(X_i,P):\Dict(P,X_i)}.\
+  \lambdastar\ \overline{x_j:\trans{\tau_j}}.\ t_f
+\]
+at $\trans{\sigma}$, which is exactly the type translated from the surface function expression.
+
+For \textsc{E-TypeApp}, the callee premise gives an elaboration
+\[
+  \ectx\has e:
+  \ftype{\overline{X_i:\overline{P_i}}}
+         {\overline{\ell_j:\tau_j}}
+         {\tau_r}
+  \elab t.
+\]
+The induction hypothesis gives $t$ the translated universal type.
+Core type application instantiates each universal binder $X_i$ with
+$\trans{\tau_i'}$.
+For every source constraint $X_i:P$, the evidence premise elaborates to a dictionary $d_{i,P}$; by Theorem 1,
 $d_{i,P}:\Dict(P,\trans{\tau_i'})$.
-Repeated core application yields the instantiated result type.
-By Lemma 5, this type is equal to the translation of the surface substitution result.
+After the type applications and these dictionary applications, the remaining core type is
+\[
+  \arrstar(
+    \overline{\trans{\subst{\overline{\tau_i'}}{\overline{X_i}}\tau_j}},
+    \trans{\subst{\overline{\tau_i'}}{\overline{X_i}}\tau_r}).
+  )
+\]
+By Lemma 4, this is the translation of the surface substitution result stated in the conclusion.
 
-For \textsc{E-Call}, the induction hypothesis gives the translated function type for the callee.
-Lemma 8 gives each elaborated actual argument the corresponding translated formal type.
-Repeated use of the core application rule yields $\trans{\tau_r}$.
+For \textsc{E-Call}, the callee elaborates to $t$ at type
+$\ftype{\emptyctx}{\overline{\ell_i:\tau_i}}{\tau_r}$.
+The induction hypothesis gives
+$t:\arrstar(\overline{\trans{\tau_i}},\trans{\tau_r})$.
+Lemma 7 gives the matched and elaborated actual arguments
+$\overline{u_i}$ with types $\overline{\trans{\tau_i}}$.
+Repeated use of the core application rule, or the zero-argument convention encoded by $\appstar$, gives
+$\appstar(t,\overline{u_i}):\trans{\tau_r}$.
 
-For \textsc{E-Construct}, Lemma 8 gives every field expression the translated field type.
-The core record-introduction rule gives a record of type
-$\{\overline{x_i:\trans{\tau_i}}\}$, which is $\trans{S}$.
-For \textsc{E-Field}, the induction hypothesis gives $t:\trans{S}$, and the definition of $\trans{S}$ contains field $x:\trans{\tau}$, so core projection gives $t.x:\trans{\tau}$.
+For \textsc{E-Construct}, the premises provide
+$\Psi_S(S)=\{\overline{x_i:\tau_i}\}$ and elaborated constructor arguments
+$\overline{t_i}$ matched against those fields.
+Lemma 7 gives each $t_i:\trans{\tau_i}$.
+The core record-introduction rule gives
+$\{\overline{x_i=t_i}\}:\{\overline{x_i:\trans{\tau_i}}\}$.
+By definition, this record type is $\trans{S}$, so the constructor term has the translated struct type.
+For \textsc{E-Field}, the receiver premise gives
+$\ectx\has e:S\elab t$ and $\Psi_S(S)(x)=\tau$.
+The induction hypothesis yields $t:\trans{S}$.
+Since $\trans{S}$ is the record type containing field $x:\trans{\tau}$, the core projection rule gives
+$t.x:\trans{\tau}$.
 
-For \textsc{E-StructMethod}, the global context contains
-$\mu(S,m):\trans{\sigma}$ where
-$\sigma=\ftype{\overline{X_i:\overline{P_i}}}{\epsilon:S,\overline{\ell_j:\tau_j}}{\tau_r}$.
-The induction hypothesis gives the receiver $t:\trans{S}$.
-The generated wrapper first abstracts over the method type parameters, then over the inserted dictionary parameters, and finally over the visible value parameters.
-Inside the wrapper body, core type application instantiates $\mu(S,m)$, the dictionary arguments discharge the method constraints, the captured receiver $t$ supplies the explicit receiver parameter, and the visible arguments supply the remaining parameters.
-The body has type $\trans{\tau_r}$, so the whole wrapper has exactly the translated receiver-stripped method type.
-For \textsc{E-ConstrainedMethod}, context translation gives $d:\Dict(P_k,X)$.
-By definition of dictionary types, $d.m$ has the requirement type translated with protocol \Self interpreted as $X$.
-The generated wrapper abstracts over the requirement's method type parameters, inserted dictionary parameters, and visible value parameters.
-In the wrapper body, $d.m$ is instantiated at those type parameters, applied to the inserted dictionaries, applied to the receiver $t:X$, and then applied to the visible arguments.
-Lemma 6 identifies this core type with the translation of the surface type
-$[\Self\mapsto X](\ftype{\overline{Y_i:\overline{Q_i}}}{\overline{\ell_j:\tau_j}}{\tau_r})$.
+For \textsc{E-StructMethod}, write
+\[
+  \sigma=
+  \ftype{\overline{X_i:\overline{P_i}}}
+         {\epsilon:S,\overline{\ell_j:\tau_j}}
+         {\tau_r}.
+\]
+The translated global context contains
+$\mu(S,m):\trans{\sigma}$.
+The receiver premise and induction hypothesis give $t:\trans{S}$.
+In the generated wrapper $M_S$, the outer core type abstractions introduce the method type variables $X_i$.
+The following dictionary lambdas introduce one parameter
+$\delta(X_i,P):\Dict(P,X_i)$ for each method constraint.
+Inside the value-lambda body, $\mu(S,m)$ is first type-applied to the current $X_i$, then applied to the introduced dictionaries, then applied to the captured receiver $t:\trans{S}$, and finally applied to the visible arguments $\overline{y_j:\trans{\tau_j}}$.
+Core application therefore gives the body type $\trans{\tau_r}$.
+Core abstraction over the visible arguments, dictionaries, and type variables reconstructs
+$\trans{\ftype{\overline{X_i:\overline{P_i}}}{\overline{\ell_j:\tau_j}}{\tau_r}}$.
 
-For \textsc{E-IfElse}, the induction hypothesis gives a Boolean condition and two branch terms of the same translated type.
-The core conditional rule gives that translated branch type.
+For \textsc{E-ConstrainedMethod}, the receiver has type variable $X$ and elaborates to $t$.
+The induction hypothesis gives $t:X$.
+The premise $\Delta(X,P_k)=d$ and context translation give
+$d:\Dict(P_k,X)$.
+If
+\[
+  \Psi_P(P_k)(m)=
+  \ftype{\overline{Y_i:\overline{Q_i}}}
+         {\epsilon:\Self,\overline{\ell_j:\tau_j}}
+         {\tau_r},
+\]
+then dictionary projection gives $d.m$ the requirement type translated with protocol \Self interpreted as $X$.
+The generated wrapper $M_X$ type-abstracts over $\overline{Y_i}$, abstracts over dictionaries for $\overline{Y_i:\overline{Q_i}}$, and abstracts over visible arguments
+$\overline{y_j:\trans{[\Self\mapsto X]\tau_j}}$.
+Its body applies $d.m$ to those type arguments, dictionaries, the receiver $t:X$, and the visible arguments.
+This body has type $\transSelf{X}{\tau_r}$.
+By Lemma 5, the parameter and result types are equal to the ordinary translations of the surface types after substituting $[\Self\mapsto X]$, so $M_X$ has the type stated by the elaboration rule.
 
-For \textsc{E-AsAny}, the induction hypothesis gives $t:\trans{\tau}$ and Theorem 1 gives $d:\Dict(P,\trans{\tau})$.
-The record $\{\kw{value}=t,\kw{dict}=d\}$ has type
-$\{\kw{value}:\trans{\tau},\kw{dict}:\Dict(P,\trans{\tau})\}$.
-Core existential introduction gives
-$\exists X.\{\kw{value}:X,\kw{dict}:\Dict(P,X)\}$, which is $\trans{\Any{P}}$.
+For \textsc{E-IfElse}, the premises elaborate the guard and both branches:
+$e\elab t$, $ss_1\elab t_1$, and $ss_2\elab t_2$.
+The induction hypothesis gives $t:\Bool$ and, using Theorem 3 for statement sequences, the branch typings
+$t_1:\trans{\tau}$ and $t_2:\trans{\tau}$.
+The core conditional rule gives
+$\kw{if}\ t\ \kw{then}\ t_1\ \kw{else}\ t_2:\trans{\tau}$.
+
+For \textsc{E-AsAny}, the induction hypothesis gives $t:\trans{\tau}$.
+The evidence premise and Theorem 1 give $d:\Dict(P,\trans{\tau})$.
+The core record rule gives
+\[
+  \{\kw{value}=t,\kw{dict}=d\}:
+  \{\kw{value}:\trans{\tau},\kw{dict}:\Dict(P,\trans{\tau})\}.
+\]
+Core existential introduction packages this record at witness type $\trans{\tau}$, producing type
+$\exists X.\{\kw{value}:X,\kw{dict}:\Dict(P,X)\}$.
+This is exactly $\trans{\Any{P}}$.
 
 For \textsc{E-ExistentialMethod}, the induction hypothesis gives
-$t:\trans{\Any{P}}=\exists X.\{\kw{value}:X,\kw{dict}:\Dict(P,X)\}$.
-In the body of the core unpack, assume fresh $X$ and
+\[
+  t:\trans{\Any{P}}
+   =\exists X.\{\kw{value}:X,\kw{dict}:\Dict(P,X)\}.
+\]
+The generated term first abstracts over method type variables, dictionary parameters, and visible arguments.
+Inside those abstractions, the unpack rule introduces a fresh type $X$ and a package body variable
 $z:\{\kw{value}:X,\kw{dict}:\Dict(P,X)\}$.
-Then $z.\kw{value}:X$ and $z.\kw{dict}:\Dict(P,X)$.
-The field $z.\kw{dict}.m$ has the protocol requirement type translated with protocol \Self interpreted as $X$.
-Applying it to $z.\kw{value}$ supplies the hidden receiver.
-Method type parameters, required dictionaries, and visible value parameters are introduced by the outer lambdas.
-By Lemma 7 and the premises
-$\Self\notin\fv(\overline{\tau_j})$ and $\Self\notin\fv(\tau_r)$, neither the visible parameter types nor the result type mention the locally opened $X$.
-Therefore the core existential elimination side condition is satisfied, and the unpack expression has the translated receiver-stripped method type.
+Core projection gives $z.\kw{value}:X$ and
+$z.\kw{dict}:\Dict(P,X)$.
+If the protocol requirement for $m$ is
+\[
+  \ftype{\overline{Y_i:\overline{Q_i}}}
+         {\epsilon:\Self,\overline{\ell_j:\tau_j}}
+         {\tau_r},
+\]
+then $z.\kw{dict}.m$ has this requirement type translated with protocol \Self interpreted as the opened type $X$.
+After applying it to the method type arguments, the introduced requirement dictionaries, the hidden receiver $z.\kw{value}$, and the visible arguments, the unpack body has result type $\transSelf{X}{\tau_r}$.
+The side conditions require
+$\Self\notin\fv(\overline{\tau_j})$ and $\Self\notin\fv(\tau_r)$.
+By Lemma 6, the visible parameter types and result type are therefore independent of the locally opened $X$:
+$\transSelf{X}{\overline{\tau_j}}=\trans{\overline{\tau_j}}$ and
+$\transSelf{X}{\tau_r}=\trans{\tau_r}$.
+Thus the result type may escape the unpack, satisfying the core existential-elimination side condition, and the whole generated wrapper has the receiver-stripped method type translated from the surface rule.
 \qed
 
 \paragraph{Theorem 3: Statement-sequence elaboration preserves typing.}
@@ -1177,7 +1423,7 @@ In \textsc{ES-Let}, Theorem 2 gives the initializer $t_x:\trans{\tau_x}$.
 The induction hypothesis, applied under the extended context $\Gamma,x:\tau_x$, gives the body $t:\trans{\tau}$.
 The generated lambda application therefore has type $\trans{\tau}$.
 For a local function declaration, the induction hypothesis gives the body of the local function in the context extended with its type parameters, dictionaries, and value parameters.
-Lemma 9 types the generated function wrapper at $\trans{\sigma}$.
+Lemma 8 types the generated function wrapper at $\trans{\sigma}$.
 The induction hypothesis then types the remaining sequence under the extended binding for $f$, and the final lambda application preserves the result type.
 \qed
 
@@ -1188,12 +1434,12 @@ In particular, top-level value, function, method, and conformance dictionary def
 
 \paragraph{Proof.}
 By cases on declaration elaboration.
-Struct and protocol declarations emit no core term bindings; they only contribute entries to $\Psi$, whose type-level well-formedness follows from declaration checking and Lemmas 1--3.
+Struct and protocol declarations emit no core term bindings; they only contribute entries to $\Psi$, whose type-level well-formedness follows from declaration checking and Lemmas 1 and 2.
 For a top-level let declaration, surface typing gives $\Psi;\emptyctx;\emptyctx;\bot\has e:\tau$.
 Expression preservation gives the elaborated initializer type $\trans{\tau}$, so the generated binding $x=t$ is well typed.
 
 For a top-level function, statement-sequence preservation applies to the body under the function's type parameters, dictionary evidence parameters, and ordinary parameters.
-Lemma 9 then gives the generated binding the translated function-scheme type.
+Lemma 8 then gives the generated binding the translated function-scheme type.
 For a method declaration owned by $S$, the same argument applies, except that the local context also contains the explicit receiver $\kw{self}:S$.
 The resulting top-level method function has type $\trans{\Psi_M(S)(m)}$.
 
@@ -1202,7 +1448,7 @@ $m_i:\sigma_i$ of $P$ is implemented by a method of $S$ whose type is
 $[\Self\mapsto S]\sigma_i$.
 The method case above gives
 $\mu(S,m_i):\trans{[\Self\mapsto S]\sigma_i}$.
-By Lemma 6,
+By Lemma 5,
 $\trans{[\Self\mapsto S]\sigma_i}=\transSelf{\trans{S}}{\sigma_i}$.
 This is exactly the field type expected by $\Dict(P,\trans{S})$.
 The core record-introduction rule therefore gives
