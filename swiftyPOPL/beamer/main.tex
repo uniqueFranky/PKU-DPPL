@@ -24,6 +24,13 @@
 
 % define pku red color
 \definecolor{pkured}{cmyk}{0,1.0,1.0,0.45}
+\definecolor{surfaceKeyword}{RGB}{150,45,75}
+\definecolor{surfaceType}{RGB}{36,96,150}
+\definecolor{surfaceMethod}{RGB}{0,120,105}
+\definecolor{surfaceVar}{RGB}{115,72,140}
+\definecolor{surfaceLabel}{RGB}{150,95,20}
+\definecolor{surfaceString}{RGB}{150,65,35}
+\definecolor{surfaceFrame}{RGB}{210,210,210}
 % set pku red color for title and frame title
 \setbeamercolor{title}{bg=pkured}
 % set title font to bold
@@ -33,6 +40,8 @@
 \setbeamerfont*{frametitle}{size=\large,series=\bfseries}
 % show header
 \useoutertheme[subsection=false]{miniframes}
+% remove default navigation icons from the bottom-right corner
+\setbeamertemplate{navigation symbols}{}
 
 % set header bar background color
 \setbeamercolor{section in head/foot}{fg=white, bg=pkured}
@@ -54,8 +63,7 @@
   \end{beamercolorbox}%
   % date and page number box
   \begin{beamercolorbox}[wd=.25\paperwidth,ht=2.25ex,dp=1ex,right]{section in head/foot}%
-    \usebeamerfont{date in head/foot}\insertshortdate{}\hspace*{3.5em}
-    \insertframenumber{} / \inserttotalframenumber\hspace*{2ex} 
+    \usebeamerfont{date in head/foot}\insertframenumber{} / \inserttotalframenumber\hspace*{2ex}
   \end{beamercolorbox}%
 }
 \makeatother
@@ -106,6 +114,29 @@
   framerule=0.2pt,
   xleftmargin=1mm,
   xrightmargin=1mm
+}
+
+\lstdefinestyle{swiftypopl}{
+  basicstyle=\ttfamily\scriptsize,
+  columns=fullflexible,
+  keepspaces=true,
+  showstringspaces=false,
+  frame=single,
+  framerule=0.2pt,
+  rulecolor=\color{surfaceFrame},
+  xleftmargin=1mm,
+  xrightmargin=1mm,
+  keywordstyle=\color{surfaceKeyword}\bfseries,
+  morekeywords={protocol,struct,extension,func,let,any,as},
+  keywordstyle=[2]\color{surfaceType}\bfseries,
+  morekeywords=[2]{ReusableCell,FeedCell,CellPool,String,Int,Bool,Unit,T},
+  keywordstyle=[3]\color{surfaceMethod},
+  morekeywords=[3]{render,reuse,prepareForReuse},
+  keywordstyle=[4]\color{surfaceVar},
+  morekeywords=[4]{cell,pool,erased},
+  keywordstyle=[5]\color{surfaceLabel},
+  morekeywords=[5]{id},
+  stringstyle=\color{surfaceString}
 }
 
 \newcommand{\lang}{\textsc{SwiftyPOPL}}
