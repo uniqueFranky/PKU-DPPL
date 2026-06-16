@@ -1,44 +1,32 @@
 \section{Motivation}
 
-\begin{frame}{From Inheritance to Capabilities}
+\begin{frame}{Question: What Is the Typed Meaning?}
 \small
-\begin{columns}[T]
-\begin{column}{0.48\textwidth}
-\textbf{Class inheritance}
-\begin{itemize}
-  \item Reuse is tied to a fixed hierarchy.
-  \item Base-class changes can silently affect subclasses.
-  \item Designers must decide the hierarchy early.
-\end{itemize}
-\end{column}
-\begin{column}{0.48\textwidth}
-\textbf{Protocol-oriented style}
-\begin{itemize}
-  \item Abstraction is based on capabilities.
-  \item Conformance can be added outside the type definition.
-  \item Generic code asks for required behavior, not ancestry.
-\end{itemize}
-\end{column}
-\end{columns}
+Swift-style protocols are convenient surface syntax, but their typed core
+meaning is less direct.
 
 \vspace{2mm}
-\begin{block}{Question}
-What is the typed core meaning of Swift-style protocols, generic constraints, and \texttt{any P} values?
+\begin{center}
+\setlength{\tabcolsep}{4pt}
+\renewcommand{\arraystretch}{1.08}
+\begin{tabular}{lll}
+\toprule
+Surface feature & Static role & Core idea \\
+\midrule
+\texttt{protocol P} & required methods & dictionary type \\
+\texttt{extension S: P} & concrete conformance & dictionary value \\
+\texttt{T: P} & generic capability assumption & dictionary parameter \\
+\texttt{any P} & hidden conforming value & existential package \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\vspace{2mm}
+\begin{block}{Goal}
+Design a small Swift-like language whose protocol features elaborate to a
+standard typed core calculus.
 \end{block}
-\end{frame}
 
-\begin{frame}{Why \lang?}
-\small
-Swift protocols are expressive, but the full language is too large for a clean TAPL-style formalization.
-
-\vspace{2mm}
-\begin{itemize}
-  \item \textbf{Surface language:} a small Swift-like fragment with structs, protocols, extensions, generic constraints, first-class polymorphic functions, and \Any{P}.
-  \item \textbf{Core language:} System F with records, existentials, conditionals, and natural-number primitives.
-  \item \textbf{Main idea:} protocol features are not primitive at runtime; they elaborate into ordinary typed core constructs.
-\end{itemize}
-
-\vspace{1mm}
 \[
   \text{well-typed surface program}
   \quad\Longrightarrow\quad
@@ -46,196 +34,71 @@ Swift protocols are expressive, but the full language is too large for a clean T
 \]
 \end{frame}
 
-\begin{frame}{Scope}
-\small
-\begin{center}
-\begin{tabular}{lll}
-\toprule
-Feature area & In scope & Out of scope \\
-\midrule
-Data & structs, fields & classes, inheritance \\
-Protocols & requirements, extensions & associated types \\
-Polymorphism & parametric, constrained, first-class & implicit inference \\
-Existentials & \Any{P} packages & \texttt{some P} opaque types \\
-Effects & pure expressions & references, mutation, effects \\
-\bottomrule
-\end{tabular}
-\end{center}
+\section{Surface Typing}
 
-\vspace{2mm}
-\begin{itemize}
-  \item The fragment is intentionally small enough to elaborate and prove.
-  \item It is still rich enough to model delegate-style and protocol-oriented Swift patterns.
-\end{itemize}
-\end{frame}
-
-\section{Surface Language Design}
-
-\begin{frame}[fragile]{Surface Fragment in One Example}
-\begin{columns}[T]
-\begin{column}{0.49\textwidth}
-\scriptsize
-\textbf{SwiftyPOPL source}
-\begin{lstlisting}[style=swiftypopl,aboveskip=0.5mm,belowskip=0pt]
+\begin{frame}[fragile]{Running Example}
+\begin{lstlisting}[
+  style=swiftypopl,
+  basicstyle=\ttfamily\scriptsize,
+  aboveskip=1mm,
+  belowskip=0pt
+]
 protocol ReusableCell {
   func render() -> String
 }
-struct FeedCell { let id: String }
+
+struct FeedCell { 
+  let id: String 
+  func getId() -> String { id }
+}
+
 extension FeedCell: ReusableCell {
-  func render() -> String { "feed" }
+  func render() -> String { self.getId() }
 }
-func reuse<T: ReusableCell>
-  (cell: T) -> T { cell }
-struct CellPool {
-  let reuse: <T: ReusableCell>
-    (cell: T) -> T
-}
-let cell: FeedCell =
-  FeedCell(id: "feed")
-let pool: CellPool =
-  CellPool(reuse: reuse)
-let erased: any ReusableCell =
-  cell as any ReusableCell
-pool.reuse<FeedCell>(cell: cell)
+
+let keep: <T: ReusableCell>(cell: T) -> T =
+  func <T: ReusableCell>(cell: T) -> T {
+    if true { cell } else { cell }
+  }
+
+let cell: FeedCell = FeedCell(id: "feed")
+
+let erased: any ReusableCell = cell as any ReusableCell
 \end{lstlisting}
-\end{column}
-\begin{column}{0.47\textwidth}
-\normalsize
-\textbf{iOS background}
-
-\vspace{0.5mm}
-UIKit reuses table/collection cells; Swift projects often wrap custom cells in \texttt{ReusableCell}.
-
-\vspace{0.5mm}
-\textbf{What this fragment contains}
-
-\vspace{0.5mm}
-\begin{itemize}
-  \item Nominal data: \texttt{FeedCell}.
-  \item Reuse evidence: \texttt{render}, \texttt{FeedCell: ReusableCell}.
-  \item Polymorphic reuse values: \texttt{CellPool.reuse}, \texttt{any ReusableCell}.
-\end{itemize}
-\end{column}
-\end{columns}
 \end{frame}
 
-\begin{frame}{Design Choice 1: Nominal Surface, Structural Core}
+\begin{frame}{Surface Typing Grammar}
 \small
-Surface programs name their types nominally.
-
-\vspace{1mm}
-\begin{itemize}
-  \item Users write \texttt{FeedCell}, not its record layout.
-  \item Fields are collected from the struct declaration.
-  \item Methods are looked up through the nominal owner, not by record shape.
-\end{itemize}
-
-\vspace{2mm}
 \[
-\Psi_S(\kw{FeedCell})=\{\kw{id}:\String\}
+\begin{array}{rcll}
+\tau
+&::=&
+\Int \mid \Bool \mid \String \mid \Unit
+& \text{base types}
+\\
+&\mid&
+S \mid X \mid \Self
+& \text{struct, type variable, contextual self}
+\\
+&\mid&
+\Any{P}
+& \text{existential protocol value}
+\\
+&\mid&
+\ftype{\overline{X:\overline{P}}}
+       {\overline{\ell:\tau}}
+       {\tau}
+& \text{first-class function scheme}
+\\[1mm]
+\ell
+&::=&
+\epsilon \mid \kw{label}
+& \text{positional or labeled parameter}
+\end{array}
 \]
-
-\vspace{1mm}
-\begin{block}{Why keep this split?}
-The surface language models Swift-style nominal declarations, while elaboration can later erase them into ordinary core records.
-\end{block}
 \end{frame}
 
-\begin{frame}{Design Choice 2: Protocols as Capabilities}
-\small
-Protocols name capabilities; extensions provide evidence that a concrete type has that capability.
-
-\vspace{1mm}
-\begin{center}
-\begin{tabular}{lll}
-\toprule
-Surface form & Static meaning & Later elaboration idea \\
-\midrule
-\texttt{protocol P} & capability interface & dictionary type \\
-\texttt{extension S: P} & concrete conformance & evidence value \\
-\texttt{T: P} & generic capability assumption & evidence parameter \\
-\texttt{any P} & hidden conforming value & existential package \\
-\bottomrule
-\end{tabular}
-\end{center}
-
-\vspace{1mm}
-\begin{itemize}
-  \item Conformance can be added outside the original struct declaration.
-  \item Generic code asks for capabilities, not ancestry.
-  \item \Any{P} stores a value without revealing which concrete type implements $P$.
-\end{itemize}
-\end{frame}
-
-\begin{frame}[fragile]{Design Choice 3: First-Class Polymorphism}
-\small
-A generic function scheme is a value type, not only a declaration form.
-
-\vspace{1mm}
-\begin{columns}[T]
-\begin{column}{0.47\textwidth}
-\scriptsize
-\begin{lstlisting}[style=swiftypopl]
-struct CellPool {
-  let reuse: <T: ReusableCell>
-    (cell: T) -> T
-}
-
-let pool: CellPool =
-  CellPool(reuse: reuse)
-
-pool.reuse<FeedCell>(cell: cell)
-\end{lstlisting}
-\end{column}
-\begin{column}{0.49\textwidth}
-\[
-\sigma =
-\ftype{T:\kw{ReusableCell}}{\kw{cell}:T}{T}
-\]
-\[
-\begin{aligned}
-\trans{\sigma}
-&=
-\forall T.\
-\Dict(\kw{ReusableCell},T)\to\\
-&\quad T\to T
-\end{aligned}
-\]
-
-\vspace{1mm}
-\begin{itemize}
-  \item Polymorphic functions can be stored in fields and passed around.
-  \item Type application supplies both the concrete type and its evidence.
-  \item Method selection also returns a function value before instantiation.
-\end{itemize}
-\end{column}
-\end{columns}
-\end{frame}
-
-\begin{frame}{Design Choice 4: Explicit Receivers Internally}
-\small
-Surface methods look like member functions:
-\[
-\kw{cell}.\kw{render}()
-\]
-
-\vspace{1mm}
-The front end represents them as ordinary functions whose first argument is the receiver:
-\[
-\Psi_M(\kw{FeedCell})(\kw{render})
-=
-(\epsilon:\kw{FeedCell})\to\String
-\]
-
-\vspace{1mm}
-\begin{itemize}
-  \item Struct and extension methods receive a concrete \texttt{self}.
-  \item Protocol requirements receive abstract \Self.
-  \item Member selection later becomes receiver capture plus ordinary function application.
-\end{itemize}
-\end{frame}
-
-\begin{frame}{Information Collected Before Checking}
+\begin{frame}{Typing Contexts}
 \small
 \[
 \Psi=(\Psi_S,\Psi_P,\Psi_C,\Psi_M,\Psi_V)
@@ -243,15 +106,17 @@ The front end represents them as ordinary functions whose first argument is the 
 
 \begin{center}
 \scriptsize
+\setlength{\tabcolsep}{3pt}
+\renewcommand{\arraystretch}{1.05}
 \begin{tabular}{lll}
 \toprule
-Component & Stores & Example role \\
+Context & Stores & Example \\
 \midrule
-$\Psi_S(S)$ & struct fields & layout of \texttt{FeedCell} \\
-$\Psi_P(P)$ & protocol requirements & requirements of \texttt{ReusableCell} \\
-$\Psi_C(S,P)$ & conformances & \texttt{FeedCell: ReusableCell} \\
-$\Psi_M(S)$ & available methods & methods owned by \texttt{FeedCell} \\
-$\Psi_V(x)$ & top-level values/functions & type of \texttt{reuse} \\
+$\Psi_S(S)$ & struct fields & $\Psi_S(\kw{FeedCell})=\{\kw{id}:\String\}$ \\
+$\Psi_P(P)$ & protocol requirements & $\kw{render}:\Self\to\String$ \\
+$\Psi_C(S,P)$ & conformances & $\kw{FeedCell}:\kw{ReusableCell}$ \\
+$\Psi_M(S)$ & methods of a type & $\kw{FeedCell.render}$ \\
+$\Psi_V(x)$ & top-level values & $\kw{keep}:\forall T.\ldots$ \\
 \bottomrule
 \end{tabular}
 \end{center}
@@ -260,241 +125,474 @@ $\Psi_V(x)$ & top-level values/functions & type of \texttt{reuse} \\
 \begin{itemize}
   \item $\Omega$ records generic constraints such as $T:\kw{ReusableCell}$.
   \item $\Gamma$ records local values and parameters.
-  \item $\rho$ resolves \Self\ in struct, extension, and protocol scopes.
+  \item $\rho$ resolves \Self: concrete in structs/extensions, abstract in protocols.
 \end{itemize}
 \end{frame}
 
-\begin{frame}{Protocol Satisfaction: The Bridge to Elaboration}
-\small
-Only two surface types can produce protocol evidence:
-
+\begin{frame}{Checker: Deciding Well-Typedness}
+\scriptsize
 \[
-\inferrule*[Right=\textsc{Sat-Struct}]
-  {(S,P)\in\dom(\Psi_C)}
-  {\Psi;\Omega\vdash S\modelsP P}
-\]
-\[
-\inferrule*[Right=\textsc{Sat-TVar}]
-  {X:\overline{P}\in\Omega \\ P\in\overline{P}}
-  {\Psi;\Omega\vdash X\modelsP P}
+\inferrule*[Right=\textsc{T-TypeApp}]
+  {
+    \Psi;\Omega;\Gamma;\rho \vdash e:
+      \ftype{\overline{X_i:\overline{P_i}}}
+             {\overline{\ell_j:\tau_j}}
+             {\tau_r}
+    \\
+    \overline{
+      \Psi;\Omega \vdash \tau_i' \modelsP P
+      \quad\text{for every }P\in\overline{P_i}}
+  }
+  {
+    \Psi;\Omega;\Gamma;\rho \vdash
+      e\langle\overline{\tau_i'}\rangle:
+      \subst{\overline{\tau_i'}}{\overline{X_i}}
+      \left(\ftype{\emptyctx}{\overline{\ell_j:\tau_j}}{\tau_r}\right)
+  }
 \]
 
-\vspace{2mm}
-\begin{itemize}
-  \item Concrete structs satisfy protocols through extensions.
-  \item Type variables satisfy protocols through generic constraints.
-  \item \Any{P} does \emph{not} itself satisfy $P$; it hides a witness type and its dictionary.
-\end{itemize}
+\vspace{-1mm}
+\[
+\inferrule*[Right=\textsc{T-Call}]
+  {
+    \Psi;\Omega;\Gamma;\rho \vdash e :
+      \ftype{\emptyctx}{\overline{\ell_i:\tau_i}}{\tau}
+    \\
+    \kw{matchArgs}(\overline{a_i},\overline{\ell_i:\tau_i})
+      = \overline{\hat{a_i}:\tau_i}
+  }
+  {
+    \Psi;\Omega;\Gamma;\rho \vdash e(\overline{a_i}) : \tau
+  }
+\]
+
+\vspace{-2mm}
+\begin{center}
+\textsc{T-ConstrainedMethod}
+
+\resizebox{0.92\textwidth}{!}{$
+\inferrule*
+  {
+    \Psi;\Omega;\Gamma;\rho \vdash e:X
+    \\
+    X:\overline{P}\in\Omega
+    \\
+    P_k\in\overline{P}
+    \\
+    \Psi_P(P_k)(m)=
+      \ftype{\overline{Y_i:\overline{Q_i}}}
+             {\epsilon:\Self,\overline{\ell_j:\tau_j}}
+             {\tau_r}
+  }
+  {
+    \Psi;\Omega;\Gamma;\rho \vdash e.m:
+      [\Self\mapsto X]
+      \left(
+        \ftype{\overline{Y_i:\overline{Q_i}}}
+               {\overline{\ell_j:\tau_j}}
+               {\tau_r}
+      \right)
+  }
+$}
+\end{center}
 \end{frame}
 
-\section{Elaboration Rules}
+\section{Elaboration}
 
-\begin{frame}{Elaboration: Big Picture}
+
+\begin{frame}{Type Translation}
+\small
+\begin{block}{Target calculus}
+System F with records, existentials, conditionals, recursion, and natural
+numbers.
+\end{block}
 \small
 \[
-\text{checked surface AST}
-\quad\leadsto\quad
-\text{core syntax}
-\quad\leadsto\quad
-\text{core typechecker/evaluator}
+\begin{array}{rcl}
+\trans{\Int} &=& \Nat \\
+\trans{\Bool} &=& \Bool \\
+\trans{\String} &=& \String \\
+\trans{\Unit} &=& \Unit \\
+\trans{S} &=& \{\overline{x:\trans{\tau}}\}
+  \quad \text{where }\Psi_S(S)=\{\overline{x:\tau}\}
+\end{array}
+\]
+
+\end{frame}
+
+\begin{frame}{Conformance Translation}
+\[
+\Psi_P(P)=\{\overline{m_i:\sigma_i}\}
+\qquad
+\Dict(P,\trans{S})
+=
+\{\overline{m_i:\transSelf{\trans{S}}{\sigma_i}}\}
 \]
 
 \vspace{1mm}
+\[
+\inferrule*[]
+  {
+    (S,P)\in\dom(\Psi_C)
+    \\
+    \overline{
+      \mu(S,m_i):
+      \transSelf{\trans{S}}{\sigma_i}}
+    \\
+    \delta(S,P)
+    =
+    \{\overline{m_i=\mu(S,m_i)}\}
+  }
+  {
+    \kw{extension}\ S:P\ \{\overline{m_i}\}
+    \elab
+    \delta(S,P):\Dict(P,\trans{S})
+  }
+\]
+
+\vspace{1mm}
+\begin{block}{Checker obligation}
+Every requirement $m_i:\sigma_i$ of $P$ is implemented by $S$ after
+substituting protocol \Self\ with $S$.
+\end{block}
+\end{frame}
+
+\begin{frame}{Generic Constraints Become Dictionary Parameters}
+\small
+For a constrained generic function:
+\[
+\kw{func}\ f\langle T:P\rangle(x:T)\to R\ \{e\}
+\]
+
+the generated core has the shape:
+\[
+\begin{aligned}
+f
+&=
+\Lambda T.\
+\lambda d_{T,P}:\Dict(P,T).\
+\lambda x:T.\ \trans{e}
+\end{aligned}
+\]
+
+\vspace{1mm}
+At an explicit type application, evidence is passed immediately:
+\[
+\begin{aligned}
+f\langle S\rangle(v)
+&\elab
+f\ [\trans{S}]\ \delta(S,P)\ \trans{v}
+\end{aligned}
+\]
+
+\vspace{-1mm}
+Constrained method calls use the dictionary carried by $\Delta$:
+\[
+\inferrule*[]
+  {
+    \Psi;\Omega;\Gamma;\rho;\Delta \vdash e:X \elab t
+    \\
+    X:\overline{P}\in\Omega
+    \quad
+    P_k\in\overline{P}
+    \quad
+    \Delta(X,P_k)=d
+    \\
+    \Psi_P(P_k)(m)=
+      \ftype{\emptyctx}{\epsilon:\Self,\overline{\ell_i:\tau_i}}{\tau_r}
+    \\
+    \overline{a}\elab\overline{u}
+  }
+  {
+    e.m(\overline{a})
+    \elab
+    d.m\ t\ \overline{u}
+  }
+\]
+\end{frame}
+
+\begin{frame}{\texorpdfstring{\Any{P}}{any P} Is an Existential Package}
+\small
+\[
+\trans{\Any{P}}
+=
+\exists X.\{\kw{value}:X,\kw{dict}:\Dict(P,X)\}
+\]
+
+\vspace{1mm}
+Packaging a concrete value:
+\[
+\begin{aligned}
+&\Psi;\Omega;\Gamma;\rho;\Delta \vdash e:\tau\elab t
+\qquad
+\Psi;\Omega;\Delta \vdash \tau\modelsP P\elab d
+\\[-0.5mm]
+&\Rightarrow\quad
+e\ \kw{as}\ \Any{P}
+\elab
+\kw{pack}[\trans{\tau},\{\kw{value}=t,\kw{dict}=d\}]
+\ \kw{as}\ \trans{\Any{P}}
+\end{aligned}
+\]
+
+\vspace{1mm}
+Calling an existential-safe method:
+\[
+\begin{aligned}
+&\Psi;\Omega;\Gamma;\rho;\Delta \vdash e:\Any{P}\elab t
+\qquad
+\overline{a}\elab\overline{u}
+\\[-0.5mm]
+&\Rightarrow\quad
+e.m(\overline{a})
+\elab
+\kw{unpack}\ \{X,z\}=t\ \kw{in}\
+z.\kw{dict}.m\ z.\kw{value}\ \overline{u}
+\end{aligned}
+\]
+\end{frame}
+
+\section{Safety}
+
+\begin{frame}{Preservation Theorem}
+\small
+\begin{block}{Elaboration preservation}
+If a surface expression type checks and elaborates to a core term, then the
+core term has the translated type.
+\end{block}
+
+\[
+\Psi;\Omega;\Gamma;\rho\vdash e:\tau
+\qquad
+\Psi;\Omega;\Gamma;\rho;\Delta\vdash e:\tau\elab t
+\]
+\[
+\Longrightarrow
+\qquad
+\mathcal{E}\vdash_c t:\trans{\tau}
+\]
+
+\[
+  \mathcal{E}
+  =
+  \mathcal{G}_\Psi;\trans{\Omega};\trans{\Gamma};\trans{\Delta}
+\]
+
+\vspace{1mm}
+\begin{itemize}
+  \item $\mathcal{G}_\Psi$ types global values, method functions, and dictionaries.
+  \item $\Delta$ types local dictionary evidence for active generic constraints.
+  \item Core soundness then gives end-to-end safety.
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Proof Sketch: The Hard Cases}
+\small
 \begin{center}
-\setlength{\tabcolsep}{3pt}
-\renewcommand{\arraystretch}{1.03}
-\begin{tabular}{@{}lll@{}}
+\scriptsize
+\setlength{\tabcolsep}{4pt}
+\renewcommand{\arraystretch}{1.12}
+\begin{tabular}{p{0.28\textwidth}p{0.62\textwidth}}
 \toprule
-Surface feature & Elaboration idea & Core construct \\
+Case & Key typing argument \\
 \midrule
-Struct & structural data & record \\
-Protocol & method table & record type \\
-Extension & conformance evidence & dictionary record \\
-Generic constraint & explicit evidence & dictionary argument \\
-Polymorphic value & type abstraction & $\forall$ + lambda \\
-Method call & dictionary dispatch & projection + call \\
-\Any{P} & hidden value + evidence & existential package \\
+Evidence preservation &
+struct evidence uses $\delta(S,P)$; type-variable evidence uses $\Delta(X,P)$ \\
+\midrule
+Generic application &
+type-apply first, then pass dictionaries proved by evidence preservation \\
+\midrule
+Method selection &
+receiver capture reconstructs the receiver-stripped function type \\
+\midrule
+Constrained method &
+project $d.m$ from the dictionary for $X:P$; substitute \Self\ with $X$ \\
+\midrule
+Existential method &
+open $\exists X$ locally; \Self-free side condition keeps $X$ from escaping \\
+\midrule
+Declarations &
+methods and conformances inhabit the global signature $\mathcal{G}_\Psi$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+\end{frame}
+
+\section{Implementation}
+
+\begin{frame}{Implementation Follows the Proof Structure}
+\small
+\[
+\begin{array}{c}
+\texttt{source}
+\to
+\text{lexer/parser}
+\to
+\text{resolver}
+\to
+\text{checker}
+\to
+\text{typed AST}
+\\[1mm]
+\to
+\text{elaborator}
+\to
+\text{core syntax}
+\to
+\text{core checker/evaluator}
+\end{array}
+\]
+
+\vspace{2mm}
+\begin{center}
+\scriptsize
+\setlength{\tabcolsep}{4pt}
+\renewcommand{\arraystretch}{1.08}
+\begin{tabular}{lll}
+\toprule
+Pass & Output & Main responsibility \\
+\midrule
+Resolver & resolved AST & nominal names, \Self, explicit receivers \\
+Checker & typed AST & conformance, calls, labels, existentials \\
+Elaborator & core syntax & dictionaries, packages, unpacking \\
 \bottomrule
 \end{tabular}
 \end{center}
 
 \vspace{1mm}
 \begin{itemize}
-  \item Protocols disappear from runtime syntax.
-  \item The generated core term makes every piece of conformance evidence explicit.
+  \item Implemented in MoonBit.
+  \item The generated core program is parsed, type checked, and evaluated again.
+  \item Current limits: explicit generic instantiation and \Int\ as \Nat.
+  \item No string concatenation or surface-level unpack yet.
 \end{itemize}
 \end{frame}
 
-\begin{frame}{Core Target and Type Translation}
+\begin{frame}{Evaluation}
 \small
-\begin{block}{Target calculus}
-System F + records + existentials + conditionals + natural-number primitives.
+\begin{center}
+\scriptsize
+\setlength{\tabcolsep}{5pt}
+\renewcommand{\arraystretch}{1.12}
+\begin{tabular}{lll}
+\toprule
+Suite & Count & Coverage \\
+\midrule
+\texttt{examples/} & 7 &
+delegates, existentials, constrained generics,
+first-class polymorphism \\
+\midrule
+\texttt{test/should\_pass/} & 16 &
+structs, labels, methods, protocols, generic variables,
+\Any{P} calls \\
+\midrule
+\texttt{test/should\_fail/} & 9 &
+missing conformance, unsafe \Self, label mismatch,
+duplicate names\\
+\midrule
+Total & 32 & positive and negative surface-language examples \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\vspace{1mm}
+\begin{itemize}
+  \item Examples exercise the full pipeline:
+  parse, resolve, check, elaborate, core check, and evaluate.
+  \item Negative tests focus on checker rejection paths and existential safety.
+  \item The largest example, \texttt{ios\_settings\_screen.swift}, combines
+  existential delegates, constrained generics, and a polymorphic function field.
+\end{itemize}
+\end{frame}
+
+\section{Conclusion}
+
+\begin{frame}{Takeaways}
+\small
+\begin{itemize}
+  \item \lang\ isolates the typed core of Swift-style protocols.
+  \item Protocol conformance is explicit dictionary evidence.
+  \item Generic constraints become dictionary parameters.
+  \item \Any{P} is a standard existential package.
+  \item The preservation proof connects surface typing to core typing.
+\end{itemize}
+
+\vspace{2mm}
+\begin{block}{Summary}
+Swift-like protocol features can be safely elaborated into System F.
 \end{block}
+\end{frame}
+
+\begin{frame}[plain]
+\centering
+\vspace{20mm}
+{\Large Thank you!}
+
+\vspace{8mm}
+{\small Questions?}
+\end{frame}
+
+\appendix
+\section*{Backup}
+
+\begin{frame}{Backup: Protocol Satisfaction Produces Evidence}
+\small
+Only two surface facts can produce protocol evidence.
 
 \vspace{-1mm}
 \[
-\begin{array}{rcl}
-A &::=& \Nat \mid \Bool \mid \String \mid \Unit
-       \mid X \mid A\to A \mid \forall X.A
-       \mid \{\overline{l:A}\} \mid \exists X.A
-\\[1mm]
-t &::=& x \mid \lambda x:A.t \mid t\ t
-       \mid \Lambda X.t \mid t[A]
-       \mid \{\overline{l=t}\} \mid t.l
-       \mid \kw{pack} \mid \kw{unpack}\ \ldots
-\end{array}
+\begin{gathered}
+\inferrule*[Right=\textsc{Sat-Struct}]
+  {(S,P)\in\dom(\Psi_C)}
+  {\Psi;\Omega\vdash S\modelsP P}
+\\[2mm]
+\inferrule*[Right=\textsc{Sat-TVar}]
+  {X:\overline{P}\in\Omega \\ P\in\overline{P}}
+  {\Psi;\Omega\vdash X\modelsP P}
+\end{gathered}
 \]
 
-\vspace{-1mm}
+\vspace{2mm}
+\begin{itemize}
+  \item A concrete struct satisfies a protocol through an extension.
+  \item A type variable satisfies a protocol through a generic constraint.
+  \item \Any{P} does \emph{not} itself satisfy $P$.
+\end{itemize}
+
+\end{frame}
+
+\begin{frame}{Backup: Core Type Translation}
+\small
 \[
 \begin{array}{rcl}
 \trans{\Int} &=& \Nat \\
 \trans{\Bool} &=& \Bool \\
 \trans{\String} &=& \String \\
+\trans{\Unit} &=& \Unit \\
 \trans{S} &=& \{\overline{x:\trans{\tau}}\}
   \quad \text{where }\Psi_S(S)=\{\overline{x:\tau}\} \\
 \trans{\Any{P}} &=&
   \exists X.\{\kw{value}:X,\kw{dict}:\Dict(P,X)\}
 \end{array}
 \]
+
 \[
-\begin{array}{rcl}
 \Dict(P,A)
-&=&
+=
 \{\overline{m_i:\transSelf{A}{\sigma_i}}\}
 \quad\text{where }\Psi_P(P)=\{\overline{m_i:\sigma_i}\}
-\end{array}
 \]
-\end{frame}
-
-\begin{frame}{Evidence Rules}
-\small
-\textbf{Evidence judgment:}
-\[
-  \Psi;\Omega;\Delta \has \tau \modelsP P \elab d
-\]
-
-{\scriptsize
-\begin{mathpar}
-\inferrule*[Right=\textsc{Ev-S}]
-  { (S,P)\in\dom(\Psi_C) }
-  { \Psi;\Omega;\Delta \has S \modelsP P \elab \delta(S,P) }
-
-\inferrule*[Right=\textsc{Ev-X}]
-  { X:\overline{P}\in\Omega \\ P\in\overline{P} \\ \Delta(X,P)=d }
-  { \Psi;\Omega;\Delta \has X \modelsP P \elab d }
-\end{mathpar}
-}
 
 \vspace{1mm}
 \begin{itemize}
-  \item Concrete conformance becomes a top-level dictionary name.
-  \item Generic conformance becomes a dictionary variable from $\Delta$.
+  \item Protocol requirements use a self-parameterized translation.
+  \item In concrete conformances, protocol \Self\ is instantiated with the struct type.
 \end{itemize}
-
-\vspace{1mm}
-\[
-\begin{aligned}
-\kw{func}\ f\langle T:P\rangle(x:T)\to R\ \{e\}
-\quad\leadsto\quad
-f&=\Lambda T.\lambda d_{T,P}:\Dict(P,T).\\
- &\quad\lambda x:T.\ \trans{e}
-\end{aligned}
-\]
 \end{frame}
 
-\begin{frame}{Generic Functions and Calls}
-\small
-\textbf{\textsc{Fun: Generic Function}}
-\vspace{-1mm}
-{\scriptsize
-\[
-\inferrule*
-  {
-    \Omega'=\Omega,\overline{X_i:\overline{P_i}}
-    \\
-    \Delta'=\Delta,\overline{(X_i,P)\mapsto d_{iP}}
-    \\
-    \Psi;\Omega';\Gamma,\overline{x_j:\tau_j};\rho;\Delta'
-      \has ss:\tau_r \elab t_f
-  }
-  {
-    \ectx \has
-      \kw{func}\langle\overline{X_i:\overline{P_i}}\rangle
-      (\overline{\ell_j\ x_j:\tau_j})\to\tau_r\ \{ss\}
-      :
-      \ftype{\overline{X_i:\overline{P_i}}}
-             {\overline{\ell_j:\tau_j}}
-             {\tau_r}
-      \elab M_f
-  }
-\]
-}
-
-\vspace{-1mm}
-{\scriptsize
-\[
-\begin{aligned}
-M_f
-&=
-\Lambda\overline{X_i}.\
-\lambda\overline{d_{iP}:\Dict(P,X_i)}.\\
-&\quad
-\lambdastar\overline{x_j:\trans{\tau_j}}.\ t_f
-\end{aligned}
-\]
-}
-
-\vspace{0.5mm}
-\textbf{\textsc{TApp: Type Application}}
-\vspace{-1mm}
-{\scriptsize
-\[
-\inferrule*
-  {
-    \ectx \has e:
-      \ftype{\overline{X_i:\overline{P_i}}}
-             {\overline{\ell_j:\tau_j}}
-             {\tau_r}
-      \elab t
-    \\
-    \overline{\Psi;\Omega;\Delta \has \tau_i' \modelsP P
-      \elab d_{iP}}
-  }
-  {
-    \ectx \has e\langle\overline{\tau_i'}\rangle:
-      \subst{\overline{\tau_i'}}{\overline{X_i}}
-      \left(\ftype{\emptyctx}{\overline{\ell_j:\tau_j}}{\tau_r}\right)
-      \elab M_{\kw{tapp}}
-  }
-\]
-}
-
-\vspace{-1mm}
-{\scriptsize
-\[
-\begin{aligned}
-M_{\kw{tapp}}
-&=t[\overline{\trans{\tau_i'}}]\ \overline{d_{iP}}\\
-f\langle S\rangle(v)
-&\elab
-f\ [\trans{S}]\ \delta(S,P)\ \trans{v}
-\end{aligned}
-\]
-}
-\end{frame}
-
-\begin{frame}{Method Selection Rules}
-\small
-Methods are represented as ordinary functions with an explicit receiver.
-\[
-\mu(S,m):\trans{S}\to\trans{\tau_1}\to\cdots\to\trans{\tau_r}
-\]
-
-\vspace{-1mm}
-\textbf{\textsc{M-S: Struct Receiver}}
-\vspace{-1mm}
-{\scriptsize
+\begin{frame}{Backup: Method Selection Rules}
+\scriptsize
+\textbf{Struct receiver}
 \[
 \inferrule*
   {
@@ -513,12 +611,8 @@ Methods are represented as ordinary functions with an explicit receiver.
       \elab M_S
   }
 \]
-}
 
-\vspace{1mm}
-\textbf{\textsc{M-X: Constrained Receiver}}
-\vspace{-1mm}
-{\scriptsize
+\textbf{Constrained receiver}
 \[
 \inferrule*
   {
@@ -544,68 +638,10 @@ Methods are represented as ordinary functions with an explicit receiver.
       \elab M_X
   }
 \]
-}
-
-\vspace{-2mm}
-{\scriptsize
-\[
-\begin{aligned}
-M_S&=\Lambda\overline{X_i}.\lambda\overline{d_{iP}}.
-     \lambdastar\overline{y_j}.\
-     \appstar(\mu(S,m)\ \overline{d_{iP}}\ t,\overline{y_j}),\\
-M_X&=\Lambda\overline{Y_i}.\lambda\overline{d_{iQ}}.
-     \lambdastar\overline{y_j}.\
-     \appstar(d.m\ \overline{d_{iQ}}\ t,\overline{y_j})
-\end{aligned}
-\]
-}
 \end{frame}
 
-\begin{frame}{Existential Encoding Rule}
-\small
-\[
-\trans{\Any{P}}
-=
-\exists X.\{\kw{value}:X,\kw{dict}:\Dict(P,X)\}
-\]
-
-\textbf{\textsc{AsAny: Existential Packaging}}
-\vspace{-1mm}
-{\scriptsize
-\[
-\inferrule*
-  {
-    \ectx \has e:\tau \elab t
-    \\
-    \Psi;\Omega;\Delta \has \tau \modelsP P \elab d
-  }
-  {
-    \ectx \has e\ \kw{as}\ \Any{P}:\Any{P}
-      \elab M_{\kw{pack}}
-  }
-\]
-}
-
-{\scriptsize
-\[
-\begin{aligned}
-M_{\kw{pack}}
-&=
-\kw{pack}[\trans{\tau},\{\kw{value}=t,\kw{dict}=d\}]\\
-&\quad \kw{as}\ \exists X.\{\kw{value}:X,\kw{dict}:\Dict(P,X)\}
-\end{aligned}
-\]
-}
-
-\vspace{0.5mm}
-The cast packages the concrete value together with its conformance evidence.
-\end{frame}
-
-\begin{frame}{Existential Method Rule}
-\small
-\textbf{\textsc{AnyM: Existential Method}}
-\vspace{-1mm}
-{\scriptsize
+\begin{frame}{Backup: Existential Method Rule}
+\scriptsize
 \[
 \inferrule*
   {
@@ -628,9 +664,7 @@ The cast packages the concrete value together with its conformance evidence.
       \elab M_{\exists}
   }
 \]
-}
 
-{\scriptsize
 \[
 \begin{gathered}
 M_{\exists} =
@@ -643,18 +677,69 @@ M_{\exists} =
     \overline{y_j})
 \end{gathered}
 \]
-}
+\end{frame}
 
-\vspace{-1mm}
+\begin{frame}{Backup: Preservation Theorem Stack}
+\scriptsize
+\begin{center}
+\[
+\text{evidence}
+\Rightarrow
+\text{expressions}
+\Rightarrow
+\text{statements}
+\Rightarrow
+\text{declarations}
+\Rightarrow
+\text{program}
+\Rightarrow
+\text{safety}
+\]
+\end{center}
+
 \begin{itemize}
-  \item The side condition prevents the hidden type $X$ from escaping.
-  \item Safe existential calls are compiled to a local unpack and dictionary projection.
+  \item Type translation and context translation are well formed.
+  \item Type substitution commutes with translation.
+  \item Resolved \Self\ substitution matches self-parameterized dictionary translation.
+  \item Function wrappers preserve the translated function type.
 \end{itemize}
 \end{frame}
 
-\section{Examples}
+\begin{frame}{Backup: Checker Guarantees for Elaboration}
+\small
+\begin{center}
+\scriptsize
+\setlength{\tabcolsep}{5pt}
+\renewcommand{\arraystretch}{1.12}
+\begin{tabular}{p{0.28\textwidth}p{0.58\textwidth}}
+\toprule
+Checked artifact & Static guarantee \\
+\midrule
+$e\langle S\rangle$ &
+$S$ satisfies every constraint on the type parameter \\
+\midrule
+$e.m$ where $e:S$ &
+there is a unique member resolution in $\Psi_M(S)$, and the selected method
+has a receiver-first function type \\
+\midrule
+$e.m$ where $e:\Any{P}$ &
+the method comes from protocol $P$, and its visible parameters and result are
+\Self-free \\
+\midrule
+argument list &
+labels are matched and arguments are reordered into typed arguments \\
+\midrule
+every expression &
+annotated with its resolved surface type \\
+\midrule
+call/member access &
+records call or member resolution in the typed AST \\
+\bottomrule
+\end{tabular}
+\end{center}
+\end{frame}
 
-\begin{frame}[fragile]{Example 1: Constrained Generic}
+\begin{frame}[fragile]{Backup: Constrained Generic Example}
 \tiny
 \begin{columns}[T]
 \begin{column}{0.45\textwidth}
@@ -677,7 +762,8 @@ func keepNamed<T: Named>
   item
 }
 
-let screen: Screen = Screen(identifier: 1)
+let screen: Screen =
+  Screen(identifier: 1)
 keepNamed<Screen>(item: screen)
 \end{lstlisting}
 \end{column}
@@ -698,7 +784,6 @@ keepNamed<Screen>(item: screen)
 \end{aligned}
 \]
 
-\vspace{1mm}
 \[
 \begin{aligned}
 &\kw{keepNamed}\langle\kw{Screen}\rangle(\kw{screen})
@@ -711,417 +796,4 @@ keepNamed<Screen>(item: screen)
 \]
 \end{column}
 \end{columns}
-\end{frame}
-
-\begin{frame}[fragile]{Example 2: Existential Delegate}
-\tiny
-\begin{columns}[T]
-\begin{column}{0.45\textwidth}
-\textbf{SwiftyPOPL source}
-\begin{lstlisting}[basicstyle=\ttfamily\tiny]
-protocol SelectionDelegate {
-  func didSelect(row: Int) -> Bool
-}
-
-struct EvenSelection {
-  let enabled: Bool
-}
-
-extension EvenSelection: SelectionDelegate {
-  func didSelect(row: Int) -> Bool {
-    if self.enabled { row < 2 }
-    else { false }
-  }
-}
-
-let delegate: any SelectionDelegate =
-  concrete as any SelectionDelegate
-
-delegate.didSelect(row: 0)
-\end{lstlisting}
-\end{column}
-\begin{column}{0.52\textwidth}
-\textbf{Elaborated core shape}
-
-\vspace{1mm}
-Let $D=\kw{SelectionDelegate}$ and $E=\kw{EvenSelection}$.
-\[
-\begin{aligned}
-\trans{E}&=\{\kw{enabled}:\Bool\}\\
-\delta(E,D)&=
-  \{\kw{didSelect}=\mu(E,\kw{didSelect})\}
-\end{aligned}
-\]
-
-\[
-\trans{\Any{D}}
-=
-\exists X.\{\kw{value}:X,\ 
-\kw{dict}:\{\kw{didSelect}:X\to\Nat\to\Bool\}\}
-\]
-
-\[
-\begin{aligned}
-\kw{concrete}\ \kw{as}\ \Any{D}
-&\elab
-\kw{pack}\bigl[
-\trans{E},\\
-&\quad
-\{\kw{value}=\kw{concrete},\\
-&\quad\ \kw{dict}=\delta(E,D)\}
-\bigr]
-\end{aligned}
-\]
-
-\[
-\begin{aligned}
-&\kw{delegate}.\kw{didSelect}(0)
-\elab\\
-&\quad \kw{unpack}\ \{X,z\}=\kw{delegate}\ \kw{in}\\
-&\quad z.\kw{dict}.\kw{didSelect}\ z.\kw{value}\ 0
-\end{aligned}
-\]
-\end{column}
-\end{columns}
-\end{frame}
-
-\section{Elaboration Safety}
-
-\begin{frame}{Safety Statement}
-\small
-\begin{block}{Elaboration preservation}
-If a surface expression, statement sequence, declaration, or program type checks and elaborates to core, then the generated core term has the translated type.
-\end{block}
-
-\[
-\Psi;\Omega;\Gamma;\rho\vdash e:\tau
-\qquad
-\Psi;\Omega;\Gamma;\rho;\Delta\vdash e:\tau\elab t
-\]
-\[
-\Longrightarrow
-\qquad
-\mathcal{E}\vdash_c t:\trans{\tau}.
-\]
-
-\vspace{1mm}
-\[
-  \mathcal{E}
-  =
-  \mathcal{G}_\Psi;\trans{\Omega};\trans{\Gamma};\trans{\Delta}
-\]
-
-\vspace{2mm}
-\begin{itemize}
-  \item $\mathcal{G}_\Psi$ assigns translated types to top-level values, method functions, and conformance dictionaries.
-  \item $\trans{\Delta}$ contains the dictionary variables required by active generic constraints.
-  \item Once the generated core program is well typed, safety follows from standard core progress and preservation.
-\end{itemize}
-\end{frame}
-
-\begin{frame}{Proof Roadmap}
-\small
-\begin{columns}[T]
-\begin{column}{0.38\textwidth}
-\centering
-\[
-\begin{array}{c}
-\text{evidence preservation}
-\\[0.5mm]\Downarrow\\[-1mm]
-\text{expression preservation}
-\\[0.5mm]\Downarrow\\[-1mm]
-\text{statement-sequence preservation}
-\\[0.5mm]\Downarrow\\[-1mm]
-\text{declaration preservation}
-\\[0.5mm]\Downarrow\\[-1mm]
-\text{program preservation}
-\\[0.5mm]\Downarrow\\[-1mm]
-\text{end-to-end safety}
-\end{array}
-\]
-\end{column}
-
-\begin{column}{0.58\textwidth}
-\scriptsize
-\begin{center}
-\begin{tabular}{ll}
-\toprule
-Lemma family & Role \\
-\midrule
-Type/context & translated contexts are well formed \\
-Substitution & type application commutes with translation \\
-\Self substitution & methods match dictionary fields \\
-Arguments & labels keep parameter types \\
-Wrappers & dictionaries become parameters \\
-\bottomrule
-\end{tabular}
-\end{center}
-\end{column}
-\end{columns}
-
-\vspace{2mm}
-\begin{itemize}
-  \item Each surface feature is reduced to ordinary core typing rules.
-\end{itemize}
-\end{frame}
-
-\begin{frame}{Theorem 1: Evidence Preservation}
-\small
-\begin{block}{Theorem 1: evidence preservation}
-If surface evidence proves $\tau \modelsP P$ and evidence elaboration produces $d$, then
-\[
-  \mathcal{G}_\Psi;\trans{\Omega};\trans{\Delta}
-  \vdash_c d:\Dict(P,\trans{\tau}).
-\]
-\end{block}
-
-\begin{itemize}
-  \item Concrete evidence uses the global dictionary
-  $\delta(S,P):\Dict(P,\trans{S})$.
-  \item Generic evidence uses the local dictionary variable
-  $\Delta(X,P)=d$, so $d:\Dict(P,X)$.
-\end{itemize}
-\end{frame}
-
-\begin{frame}{Theorem 2: Expression Preservation}
-\small
-\begin{block}{Theorem 2: expression preservation}
-If a checked surface expression elaborates to a core term,
-\[
-  \Psi;\Omega;\Gamma;\rho\vdash e:\tau
-  \qquad
-  \Psi;\Omega;\Gamma;\rho;\Delta\vdash e:\tau\elab t,
-\]
-then
-\[
-  \mathcal{E}\vdash_c t:\trans{\tau}.
-\]
-\end{block}
-
-\begin{itemize}
-  \item Proved by simultaneous induction with argument elaboration.
-  \item Most cases reduce directly to the corresponding core typing rule.
-  \item Protocol-specific cases rely on explicit dictionary evidence.
-\end{itemize}
-\end{frame}
-
-\begin{frame}{Expression Preservation: Main Cases}
-\scriptsize
-\begin{center}
-\begin{tabular}{p{0.35\textwidth}p{0.55\textwidth}}
-\toprule
-Case & Proof idea \\
-\midrule
-Generic application
-&
-Type-apply the callee, then pass dictionaries supplied by Theorem 1. Lemma 4 rewrites the result type after substitution.
-\\[1mm]
-Function expression
-&
-Turn constraints into dictionary parameters before ordinary parameters. Lemma 8 types the generated wrapper.
-\\[1mm]
-Concrete method
-&
-Use global method function $\mu(S,m)$, apply captured receiver, then visible arguments.
-\\[1mm]
-Constrained method
-&
-Project from evidence dictionary $d.m$; Lemma 5 identifies protocol \Self with the receiver type variable.
-\\[1mm]
-Constructor/field
-&
-Structs translate to records, so introduction and projection are direct core typing rules.
-\\
-\bottomrule
-\end{tabular}
-\end{center}
-\end{frame}
-
-\begin{frame}{Theorem 3: Statement Preservation}
-\small
-\begin{block}{Theorem 3: statement-sequence preservation}
-If a checked statement sequence elaborates to a core term,
-\[
-  \Psi;\Omega;\Gamma;\rho\vdash ss:\tau
-  \qquad
-  \Psi;\Omega;\Gamma;\rho;\Delta\vdash ss:\tau\elab t,
-\]
-then
-\[
-  \mathcal{E}\vdash_c t:\trans{\tau}.
-\]
-\end{block}
-
-\begin{itemize}
-  \item Last expression: follows directly from Theorem 2.
-  \item Let-binding: elaborates to a lambda application that binds the initializer.
-  \item Local function: Lemma 8 types the generated wrapper before checking the remaining sequence.
-\end{itemize}
-\end{frame}
-
-\begin{frame}{Theorem 4: Declaration Preservation}
-\small
-\begin{block}{Theorem 4: declaration preservation}
-For a well-formed program environment $\Psi$, every core definition emitted by a well-formed surface declaration type checks against the translated global signature $\mathcal{G}_\Psi$.
-\end{block}
-
-\vspace{-1mm}
-\begin{itemize}
-  \item Top-level values and functions use Theorems 2 and 3.
-  \item Methods are checked as top-level functions with an explicit receiver.
-  \item Extension conformance emits a dictionary:
-  \[
-    \delta(S,P)=\{\overline{m_i=\mu(S,m_i)}\}
-    :\Dict(P,\trans{S}).
-  \]
-  \item Lemma 5 turns $[\Self\mapsto S]\sigma_i$ into the field type expected by $\Dict(P,\trans{S})$.
-\end{itemize}
-\end{frame}
-
-\begin{frame}{Theorem 5: Program Safety}
-\small
-\begin{block}{Theorem 5: program elaboration preserves typing}
-If a surface program is well checked and elaborates to core,
-\[
-  \vdash p\ \kw{ok}
-  \qquad
-  p\elab I,
-\]
-then the generated core program $I$ is well typed.
-\end{block}
-
-\begin{block}{Corollary: end-to-end safety}
-If the target core calculus is type sound, then executing the generated core program cannot get stuck.
-\end{block}
-
-\begin{itemize}
-  \item Theorem 4 types all emitted global definitions.
-  \item Theorems 2 and 3 type elaborated expressions and statement sequences inside the program.
-\end{itemize}
-\end{frame}
-
-\begin{frame}{Existential Method Case}
-\small
-\[
-\trans{\Any{P}}
-=
-\exists X.\{\kw{value}:X,\kw{dict}:\Dict(P,X)\}
-\]
-
-\vspace{1mm}
-For a call $e.m(\overline{a})$, the generated core term has the shape
-\[
-\kw{unpack}\ \{X,z\}=t\ \kw{in}\
-z.\kw{dict}.m\ z.\kw{value}\ \overline{u}.
-\]
-
-\vspace{1mm}
-\begin{itemize}
-  \item Opening the package reveals a fresh hidden type $X$ only inside the unpack body.
-  \item The dictionary method is typed with protocol \Self interpreted as $X$.
-  \item The unpack body must have a result type that does not mention $X$.
-\end{itemize}
-
-\vspace{1mm}
-A method such as
-\[
-\kw{clone} : \Self \to \Self
-\]
-would return the hidden witness type $X$ after unpacking.
-
-\vspace{1mm}
-\begin{itemize}
-  \item The surface type has no name for that $X$.
-  \item Lemma 6 fixes the safe case: if visible parameter and result types are \Self-free, then $\transSelf{X}{\tau}=\trans{\tau}$.
-\end{itemize}
-\end{frame}
-
-\section{Implementation Details}
-
-\begin{frame}{Implementation Pipeline}
-\small
-\[
-\begin{array}{c}
-\texttt{.swift-like source}
-\to
-\text{lexer/parser}
-\to
-\text{resolver}
-\to
-\text{checker}
-\\[1mm]
-\to
-\text{elaborator}
-\to
-\text{core parser}
-\to
-\text{core typechecker/evaluator}
-\end{array}
-\]
-
-\vspace{2mm}
-\begin{itemize}
-  \item Implemented in MoonBit.
-  \item Surface parser produces an AST close to the user syntax.
-  \item Elaboration currently renders readable core concrete syntax, then reuses the existing core parser and interpreter.
-\end{itemize}
-\end{frame}
-
-\begin{frame}{Three Surface Passes}
-\small
-\begin{center}
-\begin{tabular}{lll}
-\toprule
-Pass & Input/output & Main responsibility \\
-\midrule
-Resolver & syntax AST $\to$ resolved AST & names, \Self, method receivers \\
-Checker & resolved AST $\to$ typed AST & conformance, calls, existentials \\
-Elaborator & typed AST $\to$ core syntax & dictionaries, packages, unpacking \\
-\bottomrule
-\end{tabular}
-\end{center}
-
-\vspace{2mm}
-\begin{itemize}
-  \item The checker records call and member resolution, so elaboration does not guess.
-  \item The core interpreter then independently type checks the generated program.
-\end{itemize}
-\end{frame}
-
-\begin{frame}{Current Limitations}
-\small
-\begin{itemize}
-  \item Single-file programs only.
-  \item Generic instantiation is explicit; no type argument inference.
-  \item \Int elaborates to core \Nat, so subtraction is saturating.
-  \item No string concatenation, because the current core has no string concat primitive.
-  \item Existential elimination is surface-restricted to safe method calls, not explicit user-level unpack.
-\end{itemize}
-
-\vspace{2mm}
-\begin{block}{Run examples}
-\texttt{moon run src -- examples/<file>.swift}
-\end{block}
-\end{frame}
-
-\section{Conclusion}
-
-\begin{frame}{Takeaways}
-\small
-\begin{itemize}
-  \item \lang\ isolates a proof-relevant subset of Swift-style protocol-oriented programming.
-  \item Protocol conformance becomes explicit dictionary evidence.
-  \item \Any{P} becomes a standard existential package.
-  \item The preservation proof connects surface typing to core typing.
-  \item The implementation follows the proof structure: resolve, check, elaborate, then run core.
-\end{itemize}
-\end{frame}
-
-\begin{frame}[plain]
-\centering
-\vspace{20mm}
-{\Large Thank you!}
-
-\vspace{8mm}
-{\small Questions?}
 \end{frame}
