@@ -1,163 +1,201 @@
-# SwiftyPOPL: A swift-style Protocol-Oriented Programming Language
-**作者:** Runbang Yan | **所属机构:** 计算机科学学院
+# SwiftyPOPL: A Swift-style Protocol-Oriented Programming Language
 
----
+**Author:** Runbang Yan  
+**Institution:** School of Computer Science, Peking University
 
-## 🧭 项目背景与动机
+SwiftyPOPL is a small Swift-like language for studying protocol-oriented programming through typed elaboration. The implemented compiler front end parses a Swift-style surface language, resolves nominal declarations, type checks protocols and generics, elaborates programs into a core calculus, and then reuses the core parser/typechecker/evaluator to run the generated program.
 
-传统的面向对象编程（OOP）高度依赖类继承，虽然支持代码复用，但也带来了显著的局限性。现代编程语言正逐渐摆脱以继承为中心的设计，转向基于能力（Capabilities）和接口一致性（Interface Conformance）的抽象。
+The project focuses on the type-theoretic core of Swift-style protocols:
 
-### 传统 OOP 的局限性
-- **脆弱的基类问题 (Fragile Base Class):** 基类的修改可能会意外破坏子类的功能。
-- **层级臃肿:** 通过继承进行复用通常会导致极深且臃肿的类层次结构。
-- **设计负担:** 每次添加新实体时，都需要费心设计其在类层次结构中的位置。
+- protocol declarations as method interfaces
+- extension-based conformances as dictionary evidence
+- constrained generics as explicit dictionary-passing functions
+- first-class polymorphic function values
+- boxed protocol values written as `any P`
+- existential-safe method calls on `any P`
 
-### 范式转变与面向协议编程 (POP)
-现代语言更倾向于接口抽象，例如 Go 语言的 Interfaces 和 Rust 的 Traits。Swift 则大力推崇**面向协议编程 (POP)**。当抽象以协议为核心时，多态就成为了关键。POP 能够自然地与以下特性结合：
-- **参数化与特设多态 (Parametric and Ad-hoc polymorphism):** 用于泛型编程和协议约束。
-- **一等函数多态 (First-class polymorphism):** 用于传递带有协议约束的多态函数。
-- **存在类型抽象 (Existential abstraction):** 用于一等抽象协议值（即 `any Protocol`）。
+## Project Layout
 
----
+```text
+src/
+  interpreter.mbt                    # end-to-end surface interpreter entry point
+  core/                              # TAPL-style core calculus
+    syntax.mbt                       # core syntax, contexts, shifting/substitution
+    core.mbt                         # core evaluator and typechecker
+    parser.mbty / lexer.mbtx         # core grammar and lexer sources
+    main.mbt                         # standalone core interpreter
+  surface/parser/
+    syntax/                          # surface AST, lexer, parser, diagnostics
+    resolver/                        # pass 1: nominal type resolution and method normalization
+    checker/                         # pass 2: type checking and conformance checking
+    elaborator/                      # pass 3: dictionary/existential elaboration to core syntax
+  surface/theory/main.tex            # course paper
 
-## 🎯 研究目标与语言设计
-
-Swift 作为一门复杂的工业级语言，其协议特性与其他语言特性交织复杂，难以直接形式化。本项目旨在引入 **SwiftyPOPL**，一种轻量级、易于形式化的核心语言。
-
-- **Swifty:** 体现其轻量级设计和受 Swift 启发的表层语法。
-- **POPL:** 体现其面向协议的编程范式。
-
-项目的核心目标是设计一个能够捕捉面向协议抽象、多种形式的多态以及存在类型协议值本质的小型语言，并专注于研究带有 `any P` 的 Swift 风格协议抽象及其存在类型安全的子集。
-
-### 语言特性范围 (Scope)
-
-以下是 SwiftyPOPL 支持与不支持的特性对比：
-
-| **特性分类** | **包含在内 (In Scope)** | **排除在外 (Out of Scope)** |
-| :--- | :--- | :--- |
-| **数据结构** | Structs (基础数据聚合) | 结构体或协议之间的继承 |
-| **协议与约束** | 定义/实现接口，简单的泛型类型约束 | 协议中的关联类型 (Associated types) |
-| **多态支持** | 参数化多态、特设多态、一等多态函数 | 不透明类型 (Opaque types, `some P`) |
-| **存在类型** | `any P` (将值与实现协议的证据打包) | 引用类型与副作用 (References and side effects) |
-
----
-
-## 💻 核心代码示例
-
-以下是 SwiftyPOPL 核心特性的表层语法示例：
-
-### 1. 协议声明与实现
-```swift
-protocol Show {
-  func show() -> String
-}
-
-struct IntBox {
-  let value: Int
-}
-
-struct BoolBox {
-  let value: Bool
-}
-
-extension IntBox: Show {
-  func show() -> String {
-    return "IntBox(\(value))"
-  }
-}
-
-extension BoolBox: Show {
-  func show() -> String {
-    return "BoolBox(\(value))"
-  }
-}
+examples/                            # complete end-to-end example programs
+test/should_pass/                    # accepted regression examples
+test/should_fail/                    # rejected regression examples
+beamer/                              # presentation slides
+docs/                                # implementation notes for individual passes
 ```
 
-### 2. 参数化多态 + 协议
-```swift
-protocol Show {
-  func show() -> String
-}
+Generated parser/lexer files such as `parser.mbt` and `lexer.mbt` are produced from the `.mbty` and `.mbtx` sources by MoonBit pre-build commands.
 
-protocol Eq {
-  func eq(_ other: Self) -> Bool
-}
+## Implemented Surface Language
 
-func describeIfEqual<T: Show & Eq>(_ x: T, _ y: T) -> String {
-  if x.eq(y) {
-    return x.show()
-  } else {
-    return "not equal"
-  }
-}
+The current surface language supports:
+
+- `Int`, `Bool`, `String`, and `Unit`
+- `struct` declarations with fields and methods
+- `protocol` declarations with method requirements
+- `extension S: P` conformance declarations
+- Swift-style external argument labels
+- generic functions and generic methods
+- constrained type parameters such as `<T: P>` and `<T: P & Q>`
+- explicit generic instantiation such as `f<Int>(x: 1)`
+- first-class polymorphic function values and polymorphic function fields
+- `any P` existential protocol values
+- casts of the form `e as any P`
+- method calls and method-value selection on existential values when the visible signature does not mention protocol `Self`
+- `if` / `if-else`
+- integer operators `+`, `-`, `<`, `>`, `<=`, `>=`
+- Boolean operators `!`, `&&`, `||`
+
+Important restrictions:
+
+- generic type arguments must be explicit; there is no implicit generic inference
+- `any P` does not itself satisfy `P`; methods on existentials are handled by generated unpacking
+- existential method selection is rejected if visible parameters or results mention protocol `Self`
+- there is no surface-level explicit existential unpack
+- there are no associated types, classes, enums, mutation, inheritance, modules, overload resolution, or protocol extensions with default implementations
+- surface `Int` elaborates to core `Nat`, so subtraction is saturating (`0 - 1` evaluates to `0`)
+- string concatenation is not implemented
+- user-defined recursion is not part of the surface fragment
+
+## Compilation Pipeline
+
+Running a surface program uses this pipeline:
+
+```text
+surface source
+  -> surface lexer/parser
+  -> resolver
+  -> checker
+  -> typed AST
+  -> elaborator
+  -> core concrete syntax
+  -> core parser/typechecker/evaluator
 ```
 
-### 3. 一等多态 + 协议
-```swift
-func makePrinter() -> <T: Show>(T) -> String {
-  return func <T: Show>(_ x: T) -> String {
-    x.show()
-  }
-}
+The passes have the following responsibilities:
+
+- `syntax`: tokenizes and parses the Swift-like surface syntax into an AST.
+- `resolver`: collects nominal type names, resolves `Self`, distinguishes structs/protocols/type variables, and turns methods into receiver-first functions.
+- `checker`: checks values, calls, labels, generic constraints, protocol conformances, member access, and existential safety.
+- `elaborator`: emits readable core syntax using dictionary passing and existential packages.
+- `core`: typechecks and evaluates the elaborated core program.
+
+## Running Programs
+
+Install the MoonBit toolchain first. From the project root, check that the project builds:
+
+```bash
+moon check
 ```
 
-### 4. 特设多态 + 存在类型 (Existentials)
-```swift
-func makeSomething(_ b: Bool) -> any Show { 
-  if b { 
-    return IntBox(value: 42) as any Show
-  } else { 
-    return BoolBox(value: true)  as any Show
-  } 
-}
+Run a complete SwiftyPOPL program with the end-to-end interpreter:
 
-let anyShow: any Show = makeSomething(true)
-anyShow.show()
+```bash
+moon run src -- examples/table_view_delegate.swift
 ```
 
----
+The interpreter prints generated core bindings and evaluated results with their core types. For example:
 
-## 📐 形式化问题与演算设计
+```bash
+moon run src -- examples/first_class_polymorphic_identity.swift
+moon run src -- examples/ios_settings_screen.swift
+```
 
-本项目提出了五个核心的形式化研究问题（Q1-Q5），并围绕这些问题设计了演算模型。
+Run an accepted regression example:
 
-### 核心研究问题
-1. **表层形式化:** 如何在一个小型类型化语言中形式化 Swift 风格的协议抽象？
-2. **核心形式化:** 如何为面向协议的特性设计核心演算？
-3. **推导/展开 (Elaboration):** 面向协议的特性应如何展开为小型核心演算？
-4. **存在类型安全:** 为了安全地打包存在类型，需要哪些类型化限制？
-5. **元理论:** 如何证明核心演算的类型可靠性（Type Soundness），以及展开过程在源语言到核心语言之间保持类型一致？
+```bash
+moon run src -- test/should_pass/struct_basic.swift
+moon run src -- test/should_pass/existential_generic_method.swift
+```
 
-### 演算设计 (Calculus Design)
-- **源语言 (Source Language):** 具备上述特性的类 Swift 表层语言。
-- **核心语言 (Core Language):** 一个小型的类型化演算（SystemF + 记录 records + 存在类型 existentials），包含：变量、Lambda 抽象/应用、类型抽象/应用、记录与投影、存在类型的打包/解包，以及基础类型（Int, Bool, String）。
+Run a rejected regression example and expect an error message:
 
-### 展开规则 (Elaboration)
-- 协议声明 ➡️ 字典记录类型 (dictionary record types)
-- 协议实现 ➡️ 字典值 (dictionary values)
-- 带有协议约束的泛型函数 ➡️ 带有显式字典参数的函数
-- 协议方法调用 ➡️ 字典投影 + 函数应用
-- 存在类型协议值 (`any P`) ➡️ 存在类型包 (existential packages)
+```bash
+moon run src -- test/should_fail/existential_self_method_rejected.swift
+moon run src -- test/should_fail/existential_missing_conformance.swift
+```
 
----
+The debugging front-end prints the typed surface program and generated core syntax without evaluating it:
 
-## 🚀 最终目标与限制
+```bash
+moon run src/surface/parser -- examples/table_view_delegate.swift
+```
 
-为了保持语言的易处理性，设计上做出了部分限制：仅允许受限的、存在类型安全的协议片段打包为 `any P`，并且在特定位置强制要求显式类型注解。
+The standalone core interpreter can run core programs directly:
 
-### 最终交付目标
+```bash
+moon run src/core -- src/core/test.f
+```
 
-1. **语言设计 (Language Design)**
-   - 类 Swift 表层语言的语法定义。
-   - 形式化的核心演算 (System F + records + existentials)。
-   - 表层语言与核心语言的类型化规则。
-   - 从表层语言到核心语言的展开规则。
-2. **工程实现 (Implementation)**
-   - 一个针对表层语言的类型检查器，能够生成展开后的核心项。
-   - 一个核心语言的解释器。
-   - 一套示例程序。
-3. **元理论 (Meta Theory)**
-   - 核心语言 Progress 和 Preservation 属性的（粗略）证明。
-   - 展开过程从表层语言到核心语言保持类型一致的（严格）证明。
+## Examples
 
-*(注：项目进度安排 Schedules 待定)*
+The `examples/` directory contains seven complete programs:
+
+- `table_view_delegate.swift`: existential table-view delegate object
+- `table_view_height_delegate.swift`: existential row-height callback
+- `existential_callback_delegate.swift`: existential callback returning `Bool`
+- `ios_settings_screen.swift`: larger iOS-style example with existential delegates, constrained generics, and a polymorphic function field
+- `first_class_polymorphic_identity.swift`: polymorphic function stored in a top-level value
+- `first_class_polymorphic_struct_field.swift`: polymorphic function stored in a struct field
+- `constrained_polymorphic_protocol.swift`: constrained generic function and dictionary passing
+
+## Tests
+
+The test files are organized as simple source-level regression examples:
+
+- `test/should_pass/`: programs that should parse, typecheck, elaborate, core-check, and evaluate
+- `test/should_fail/`: programs that should be rejected by the resolver or checker
+
+Representative positive cases cover:
+
+- struct construction and field access
+- Swift-style labels
+- extension methods
+- protocol conformance
+- generic type variables and constrained generic calls
+- first-class polymorphic method values
+- existential packaging and existential method calls
+- integer and Boolean operator elaboration
+- local variable shadowing
+
+Representative negative cases cover:
+
+- duplicate top-level declarations
+- missing protocol methods
+- missing conformance evidence for `as any P`
+- unsafe existential methods whose visible signature mentions `Self`
+- label mismatches
+- unsupported string concatenation
+- variables used outside their scope
+
+## Formalization
+
+The paper in `src/surface/theory/main.tex` describes:
+
+- the surface syntax
+- the surface type system
+- protocol satisfaction and evidence
+- elaboration to a core calculus
+- dictionary translation for protocols
+- existential encoding for `any P`
+- preservation of typing from surface elaboration to core typing
+
+The proof relies on the standard soundness theorem for the core calculus and focuses on showing that well-typed surface programs elaborate to well-typed core programs.
+
+## Implementation Status
+
+The current implementation is complete for the formalized fragment described above. It is intentionally not a full Swift model. The implementation is designed for the TAPL course project goal: making the static meaning of protocol-oriented programming explicit through a small typed language and a dictionary/existential elaboration.
