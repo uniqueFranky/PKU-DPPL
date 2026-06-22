@@ -46,7 +46,7 @@
 
 \begin{document}
 
-\title{\lang: A Swift-like Surface Language with Protocol Elaboration}
+\title{\lang: A Swift-style Protocol-Oriented Programming Language}
 
 \author{Runbang Yan}
 \email{rbyan25@stu.pku.edu.cn}
@@ -67,19 +67,33 @@ We intentionally rely on the standard soundness theorem for the core calculus an
 
 \maketitle
 
-\section{Motivation}
+\section{Introduction}
 
-Swift programmers write nominal declarations such as structs, protocols, extensions, generic functions, and values of type \Any{P}.
-The operational meaning of these constructs is less direct than their syntax suggests.
-Protocol requirements are implemented by methods on concrete structs, generic constraints need runtime evidence, and existential protocol values hide the concrete type of their payload.
-\lang\ makes this structure explicit by elaborating surface programs into a small core language.
+Modern programming languages increasingly express abstraction through composition rather than through class inheritance.
+Rust traits, Go interfaces, and Swift protocols all let programmers describe capabilities that can be attached to otherwise independent types.
+This style separates data definitions from the interfaces they satisfy, and it lets a type participate in several abstractions without committing to a single inheritance hierarchy.
 
-The design goal is not to implement all of Swift.
-Instead, the language isolates a proof-relevant subset:
-nominal structs, protocol requirements, extension-based conformances, constrained generics, Swift-style argument labels, and existential protocol packages.
-The central metatheoretic claim is elaboration preservation:
-if a surface program type checks, the elaborated core program has the translated type.
-Since core soundness is standard, this is the main nontrivial proof obligation for the surface language.
+Swift protocols are a useful representative of this design because the same protocol declaration plays several roles.
+A protocol can be used as a generic constraint, a concrete type can satisfy it through an extension-based conformance, and a value can be stored behind a boxed existential type such as \Any{P}.
+These uses share a compact surface syntax, but they hide substantial static structure:
+method implementations act as evidence for conformance, constrained generic functions need that evidence when they call protocol methods, and existential protocol values must package a hidden representation type together with enough evidence to use the protocol operations.
+
+The full Swift language is too large to isolate this mechanism directly.
+Protocols interact with associated types, protocol extensions, opaque result types, classes, structs, enums, overload resolution, modules, mutation, and runtime representation choices.
+Those features are important in Swift, but they obscure the smaller type-theoretic question studied here:
+how can protocol constraints, conformances, method calls, and existential protocol values be explained by a typed elaboration into a simpler core calculus?
+
+\lang\ answers this question by making the hidden evidence explicit.
+It is a small Swift-like surface language with nominal structs, protocols, extension-based conformances, constrained generic functions, Swift-style argument labels, and existential protocol values.
+The implementation elaborates this surface language into a TAPL-style core calculus with System F, records, and existential types.
+Under this translation, structs become records, protocol conformances become dictionaries, constrained generics receive dictionary arguments, and values of type \Any{P} become existential packages.
+
+This report makes three contributions.
+First, it defines and implements a Swift-like surface language that isolates the proof-relevant fragment of protocol abstraction.
+Second, it gives a dictionary-passing elaboration from that surface language into a typed core calculus.
+Third, it proves elaboration preservation:
+if a surface program type checks, then the elaborated core program has the translated type.
+Since soundness for the core calculus is standard, this preservation theorem is the main proof obligation for the surface language.
 
 \section{Surface Syntax Design}
 
@@ -1471,7 +1485,7 @@ Thus the generated core program is well typed.
 If $\has p\ok$, $p\elab I$, and the standard core calculus is type sound, then executing $I$ cannot get stuck.
 This follows directly from Theorem 5 and the assumed core progress and preservation theorems.
 
-\section{Implementation Notes}
+\section{Implementation Notes and Limitations}
 
 The implementation follows the same staged structure as the formal development, but it is intentionally small and direct.
 The executable entry point in \texttt{src/interpreter.mbt} reads one source file, tokenizes it with the surface lexer, parses it with the generated surface parser, resolves names, checks types, elaborates the typed surface program to core concrete syntax, and finally invokes the existing core parser, typechecker, and evaluator.
@@ -1493,16 +1507,123 @@ Method selection returns a receiver-capturing wrapper, so generic method values 
 Existential values are rendered as core packages containing a hidden representation type, a value, and a dictionary; existential-safe method calls are rendered by opening the package and immediately calling the dictionary method on the hidden receiver.
 Surface arithmetic and Boolean operators are not primitive core syntax; they are rendered as small core terms built from conditionals, fixpoints, and natural-number primitives.
 
-\section{Implementation Status and Limitations}
-
-The implementation already supports the proof-relevant path described above:
-Swift-style parameter labels, structs, protocols, extensions, constrained generic functions, dictionary-passing elaboration, existential packaging with $e\ \kw{as}\ \Any{P}$, and existential-safe method calls, including method-local type parameters.
-The arithmetic and boolean operators are surface syntax that elaborates into existing core terms.
-
-Important limitations remain.
+The implementation supports the proof-relevant path described above, but important limitations remain.
 There is no surface-level explicit unpack.
 Surface $\Int$ is currently represented by core $\Nat$, so it does not match Swift's signed integer semantics.
 String concatenation is not implemented because the core language lacks the primitive.
 The report also treats the core calculus's soundness theorem as an assumption rather than reproving it.
+
+\section{Evaluation}
+
+The evaluation is source-level and regression-oriented.
+The goal is not to measure runtime performance, but to check that the implementation covers the proof-relevant cases used in the formal development:
+nominal structs, protocol requirements, extension-based conformances, constrained generics, method lookup, first-class polymorphic functions, existential packaging, and existential-safe method calls.
+All examples and tests are ordinary \lang\ source files, so they exercise the same front-end pipeline as user programs.
+
+\begin{center}
+\begin{tabular}{|l|c|p{0.58\linewidth}|}
+\hline
+Suite & Count & Purpose \\
+\hline
+\texttt{examples/} & 7 &
+End-to-end programs that demonstrate the intended programming style:
+delegate objects, callback protocols, boxed \Any{P} values, constrained generic functions, and first-class polymorphic function values. \\
+\hline
+\texttt{test/should\_pass/} & 16 &
+Positive regression cases for accepted programs, including structs and fields, Swift-style labels, extension methods, integer and Boolean operators, generic method values, constrained protocol calls, existential method calls, and local shadowing. \\
+\hline
+\texttt{test/should\_fail/} & 9 &
+Negative regression cases for rejection paths, including duplicate top-level names, missing protocol implementations, missing conformances, unsafe existential methods that expose \Self, label mismatches, unsupported string concatenation, and out-of-scope variables. \\
+\hline
+Total & 32 & Positive and negative programs covering the implemented surface fragment. \\
+\hline
+\end{tabular}
+\end{center}
+
+The files in \texttt{examples/} are complete programs intended to illustrate how the language is used.
+The delegate examples model a common Swift/iOS pattern:
+a concrete struct implements a callback protocol, the concrete value is packed as \Any{P}, and another struct stores and invokes the existential delegate.
+For example, the table-view examples use existential protocol fields to model row-title, row-height, and selection callbacks.
+The larger \texttt{ios\_settings\_screen.swift} example combines three existential delegates with a reusable first-class polymorphic function field, and it also calls a constrained generic function.
+The remaining examples isolate first-class polymorphism and constrained protocol evidence:
+one stores a polymorphic identity function in a top-level value, one stores it in a struct field, and one uses a constrained generic function whose call elaborates with a concrete protocol dictionary.
+
+The \texttt{test/should\_pass/} directory contains smaller focused programs.
+These cases are useful because each one targets a specific rule or implementation path.
+For instance, \texttt{struct\_basic.swift} checks struct construction, field projection, and method invocation;
+\texttt{default\_parameter\_label.swift} and \texttt{type\_checker\_argument\_order.swift} check label matching;
+\texttt{generic\_method\_value\_selection\_elaboration.swift} checks that selecting a generic method produces a first-class polymorphic function value;
+and \texttt{existential\_generic\_method.swift} checks generic methods stored behind \Any{P}, including the extra dictionaries required by constrained method type parameters.
+The operator test checks the elaboration of surface arithmetic and Boolean operators into core conditionals, fixpoints, and natural-number primitives.
+
+The \texttt{test/should\_fail/} directory records programs that must be rejected.
+These tests check that the implementation rejects programs outside the formalized fragment instead of elaborating them unsafely.
+For example, \texttt{existential\_self\_method\_rejected.swift} verifies the side condition on existential method selection:
+a method whose visible result type is \Self cannot be called through \Any{P}, because the hidden witness type would escape the generated unpack.
+The missing-conformance and missing-method tests exercise protocol satisfaction and conformance checking.
+The label tests check that Swift-style external labels are enforced, and the string-concatenation test documents the current absence of a core string-concatenation primitive.
+
+Together, these examples and regression tests provide coverage for the complete implemented pipeline:
+lexing, parsing, resolution, type checking, elaboration to core syntax, core type checking, and evaluation for accepted programs; and early rejection during resolution or checking for invalid programs.
+
+\section{Discussion: Relationship to Swift Protocols}
+
+\lang\ is inspired by Swift protocols, but it is not intended to be a complete formal model of Swift.
+The language extracts a small, proof-oriented fragment that makes the static structure of protocols visible.
+In particular, it keeps nominal protocols, struct conformances, generic protocol constraints, Swift-style argument labels, and boxed protocol values written as \Any{P}.
+These are the features needed to study the usual dictionary-passing interpretation of protocol dispatch and existential packaging.
+
+The closest correspondence is between a Swift conformance witness table and a \lang\ protocol dictionary.
+A protocol declaration contributes a record type of required methods.
+An extension declaration
+\[
+  \kw{extension}\ S : P\ \{ \overline{md} \}
+\]
+is elaborated to a dictionary record witnessing that $S$ satisfies $P$.
+A constrained generic function receives such dictionaries explicitly after elaboration, and a value of type \Any{P} is represented as an existential package containing a hidden concrete value together with a dictionary for $P$.
+Thus \lang\ models the static typing and elaboration idea behind Swift protocols, rather than Swift's full source language or runtime implementation.
+
+\lang\ restricts the set of conforming types to structs.
+Swift protocols may be adopted by structs, classes, and enums, each with its own operational concerns.
+The surface language keeps only structs because they elaborate directly to core records.
+This is sufficient for studying nominal data, method lookup, and dictionary construction without adding reference semantics, inheritance, enum case analysis, or mutation.
+
+\lang\ models only method requirements, not the full range of Swift protocol requirements.
+Swift protocols can require properties, initializers, subscripts, and mutating methods in addition to ordinary methods.
+This report focuses on methods because they expose the central structure used by the elaboration:
+a requirement becomes a field in a dictionary, and a method implementation becomes an ordinary function with an explicit receiver argument.
+Other requirement forms would require additional encodings but would not change the basic dictionary-passing idea.
+
+\lang\ treats extension declarations as explicit conformance declarations.
+In Swift, conformance can be written in the original type declaration or in an extension, and protocol extensions can also provide default implementations or add helper methods that are not requirements.
+In \lang, an extension of the form $\kw{extension}\ S:P$ is used only to build the dictionary witnessing $S:P$.
+Every required method must be implemented explicitly in that extension, which keeps conformance checking local and makes dictionary construction syntax-directed.
+
+\lang\ has a much smaller generic constraint language than Swift.
+Swift protocols interact with associated types, same-type constraints, protocol inheritance, protocol composition, and \kw{where} clauses.
+The implemented language supports direct constraints of the form $X:P$, including multiple protocol constraints on one type parameter.
+This restriction keeps generic evidence first-order:
+each active constraint becomes one dictionary parameter, and each constrained method call projects from one of those dictionaries.
+
+\lang\ models boxed protocol values but not opaque result types.
+Swift distinguishes existential values written with \kw{any} from opaque values written with \kw{some}.
+The project focuses on the former because \Any{P} corresponds directly to an existential package containing a hidden representation type, a value, and a protocol dictionary.
+Opaque result types raise a different question about abstract but statically fixed result types, so they are outside the current elaboration.
+
+\lang\ handles \Self in existentials conservatively.
+Swift has subtle rules for protocols whose requirements mention \Self or associated types, especially when such protocols are used as boxed values.
+The checker in this implementation allows method selection on \Any{P} only when the visible method signature does not mention protocol \Self.
+This side condition matches the existential encoding:
+the hidden witness type is opened only inside the generated call, so it cannot appear in argument or result types that escape the unpacking scope.
+
+\lang\ omits many Swift features that are orthogonal to protocol elaboration.
+The surface language has no overload resolution, access control, modules, classes, enum cases, mutation, or Swift runtime model.
+It also represents surface \Int{} as core \Nat, so it does not model Swift's signed integer semantics.
+These omissions keep the proof focused on the intended question:
+how protocol-oriented surface constructs elaborate into ordinary System F functions, records, dictionaries, and existential packages.
+
+These differences are deliberate simplifications.
+They make the language small enough for a direct type-safety argument while preserving the main phenomenon of interest:
+surface protocol constructs elaborate into ordinary System F functions, records, dictionaries, and existential packages.
 
 \end{document}
